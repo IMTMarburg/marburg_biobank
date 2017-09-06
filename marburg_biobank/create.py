@@ -20,6 +20,12 @@ def check_dataframe(name, df):
         missing = set(must_have_columns).difference(df.columns)
         if missing:
             raise ValueError("%s is missing columns: %s, had %s" % (name, missing, df.columns))
+    elif name.endswith('_exclusion'):
+        mhc = ['patient', 'reason']
+        missing = set(mhc).difference(df.columns)
+        if missing:
+            raise ValueError("%s is missing columns: %s, had %s" % (name, missing, df.columns))
+
     if 'compartment' in df.columns:
         x = set(df['compartment'].unique()).difference(allowed_compartments)
         if x:
@@ -34,6 +40,7 @@ def categorical_where_appropriate(df):
             try:
                 df[c] = pd.to_numeric(df[c], errors='raise')
             except ValueError:
+                df[c] = df[c].astype(unicode)
                 if len(df[c].unique()) <= len(df) * 0.1:
                     df[c] = pd.Categorical(df[c])
 
@@ -51,8 +58,8 @@ def create_biobank(
         'patient': [], 'compartment': [], 'dataset': []}
     for name, df in dict_of_dataframes.items():
         basename = os.path.basename(name)
+        check_dataframe(name, df)
         if not name.startswith('_') and not basename.startswith('_'):
-            check_dataframe(name, df)
             here = set(
                 df[['patient', 'compartment']].itertuples(index=False, name=None))
             for p, c in here:
