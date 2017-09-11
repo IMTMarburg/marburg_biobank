@@ -2,11 +2,13 @@ import zipfile
 import os
 import numpy as np
 import pandas as pd
+import functools
 try:
     import cPickle as pickle
 except ImportError:
     import pickle
 
+datasets_to_cache = 32
 
 
 def lazy_member(field):
@@ -55,16 +57,24 @@ class OvcaBiobank(object):
         pcd = self.get_dataset('_meta/patient_compartment_dataset')
         return pcd['compartment'].unique()
 
+    @functools.lru_cache(datasets_to_cache)
     def get_dataset_compartments(self, dataset):
         """Get available compartments in dataset @dataset"""
         pcd = self.get_dataset('_meta/patient_compartment_dataset')
         pcd = pcd[pcd.dataset == dataset]
         return pcd['compartment'].unique()
 
+    @functools.lru_cache(datasets_to_cache)
     def get_variables_and_units(self, dataset):
         """What variables are availabe in a dataset?"""
         df = self.get_dataset(dataset)
-        return df[['variable','unit']].groupby(['variable','unit']).groups.keys()
+        if len(df['unit'].cat.categories) == 1:
+            vars = df['variable'].unique()
+            unit = df['unit'].iloc[0]
+            return set([(v, unit) for v in vars])
+        else:
+            x = df[['variable', 'unit']].drop_duplicates(['variable', 'unit'])
+            return set(zip(x['variable'], x['unit']))
 
     def get_possible_values(self, variable, unit):
         pass
@@ -72,8 +82,8 @@ class OvcaBiobank(object):
     @lazy_member('_cache_list_datasets')
     def list_datasets(self):
         """What datasets to we have"""
-        return sorted([ name for name in self.zf.namelist() if
-                not name.startswith('_') and not os.path.basename(name).startswith('_')])
+        return sorted([name for name in self.zf.namelist() if
+                       not name.startswith('_') and not os.path.basename(name).startswith('_')])
 
     @lazy_member('_cache_list_datasets_incl_meta')
     def list_datasets_including_meta(self):
@@ -82,24 +92,97 @@ class OvcaBiobank(object):
 
     @lazy_member('_datasets_with_name_lookup')
     def datasets_with_name_lookup(self):
-        return  [ds for (ds, df) in self.iter_datasets() if 'name' in df.columns]
+        return [ds for (ds, df) in self.iter_datasets() if 'name' in df.columns]
 
     def name_lookup(self, dataset, variable):
         df = self.get_dataset(dataset)
-        return df[df.variable == variable]['name'].iloc[0]  # todo: optimize using where?
+        # todo: optimize using where?
+        return df[df.variable == variable]['name'].iloc[0]
 
+    @functools.lru_cache(maxsize=datasets_to_cache)
+    def get_wide(self, dataset, standardized=False):
+        """Return dataset in row=variable, column=patient format.
+        if @standardized is True Index is always (variable, unit) or (variable, unit, name), and columns always (patient, compartment)
+        Otherwise, unit and compartment will be left of if there is only a single value for them in the dataset"""
+        df = self.get_dataset(dataset)
+        columns = ['patient']
+        index = ['variable']
+        if standardized or len(df.compartment.cat.categories) > 1:
+            columns.append('compartment')
+        if standardized or len(df.unit.cat.categories) > 1:
+            index.append('unit')
+        if 'name' in df.columns:
+            index.append('name')
+        return self.to_wide(df, index, columns)
+
+    def to_wide(self, df, index=['variable', ], columns=['patient', 'compartment'], values='value', sort_on_first_level=False):
+        """Convert a dataset (or filtered dataset) to a wide DataFrame.
+        Preferred to pd.pivot_table manually because it is
+           a) faster and
+           b) avoids a bunch of pitfalls when working with categorical data and
+           c) makes sure the columns are dtype=float if they contain nothing but floats
+
+        index = variable,unit
+        columns = (patient, compartment)
+        """
+        df = df[['value'] + index + columns]
+        set_index_on = index + columns
+        columns_pos = tuple(range(len(index), len(index) + len(columns)))
+        res = df.set_index(set_index_on).unstack(columns_pos)
+        c = res.columns
+        c = c.droplevel(0)
+        # this removes categories from the levels of the index. Absolutly
+        # necessar.
+        if isinstance(c, pd.MultiIndex):
+            c = pd.MultiIndex([list(x) for x in c.levels],
+                              labels=c.labels, names=c.names)
+        else:
+            c = list(c)
+        res.columns = c
+        if sort_on_first_level:
+            # sort on first level - ie. patient, not compartment - slow though
+            res = res[sorted(list(res.columns))]
+        for c in res.columns:
+            try:
+                res[c] = res[c].astype(float)
+            except ValueError:
+                pass
+        return res
+
+    @functools.lru_cache(maxsize=datasets_to_cache)
     def get_excluded_patients(self, dataset):
+        """Which patients are excluded from this particular dataset (or globally?"""
         global_exclusion_df = self.get_dataset('clinical/_other_exclusion')
         excluded = set(global_exclusion_df['patient'].unique())
-        #local exclusion from this dataset
+        # local exclusion from this dataset
         try:
-            exclusion_df = self.get_dataset(os.path.dirname(dataset) + '/' + '_' + os.path.basename(dataset) + '_exclusion')
+            exclusion_df = self.get_dataset(os.path.dirname(
+                dataset) + '/' + '_' + os.path.basename(dataset) + '_exclusion')
             excluded.update(exclusion_df['patient'].unique())
         except KeyError:
             pass
         return excluded
 
-
+    @functools.lru_cache(maxsize=1)
+    def get_exclusion_reasons(self):
+        """Get exclusion information for all the datasets + globally"""
+        result = {}
+        global_exclusion_df = self.get_dataset('clinical/_other_exclusion')
+        for tup in global_exclusion_df.itertuples():
+            if tup.patient not in result:
+                result[tup.patient] = {}
+            result[tup.patient]['global'] = tup.reason
+        for dataset in self.list_datasets():
+            try:
+                exclusion_df = self.get_dataset(os.path.dirname(
+                    dataset) + '/' + '_' + os.path.basename(dataset) + '_exclusion')
+                for tup in exclusion_df.itertuples():
+                    if tup.patient not in result:
+                        result[tup.patient] = {}
+                    result[tup.patient][dataset] = tup.reason
+            except KeyError:
+                pass
+        return result
 
     def iter_datasets(self, yield_meta=False):
         if yield_meta:
@@ -107,21 +190,17 @@ class OvcaBiobank(object):
         else:
             l = self.list_datasets()
         for name in l:
-                yield name, self.get_dataset(name)
+            yield name, self.get_dataset(name)
 
+    @functools.lru_cache(datasets_to_cache)
     def get_dataset(self, name):
         """Retrieve a dataset"""
         if name not in self.list_datasets_including_meta():
             raise KeyError("No such dataset: %s.\nAvailable: %s" %
                            (name, self.list_datasets_including_meta()))
         else:
-            if name not in self._cached_datasets:
-                self._cached_datasets[name] = self._get_dataset(name)
-        return self._cached_datasets[name].copy()
-
-    def _get_dataset(self, name):
-        fh = self.zf.open(name)
-        try:
-            return pickle.load(fh, encoding='latin1')
-        except TypeError:  # older pickle.load has no encoding, only needed in python3 anyhow
-            return pickle.load(fh)
+            fh = self.zf.open(name)
+            try:
+                return pickle.load(fh, encoding='latin1')
+            except TypeError:  # older pickle.load has no encoding, only needed in python3 anyhow
+                return pickle.load(fh)
