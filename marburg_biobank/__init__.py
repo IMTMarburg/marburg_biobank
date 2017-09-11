@@ -2,7 +2,10 @@ import zipfile
 import os
 import numpy as np
 import pandas as pd
-import functools
+try:
+    from functools import lru_cache
+except (ImportError, AttributeError):
+    from functools32 import lru_cache
 try:
     import cPickle as pickle
 except ImportError:
@@ -57,14 +60,14 @@ class OvcaBiobank(object):
         pcd = self.get_dataset('_meta/patient_compartment_dataset')
         return pcd['compartment'].unique()
 
-    @functools.lru_cache(datasets_to_cache)
+    @lru_cache(datasets_to_cache)
     def get_dataset_compartments(self, dataset):
         """Get available compartments in dataset @dataset"""
         pcd = self.get_dataset('_meta/patient_compartment_dataset')
         pcd = pcd[pcd.dataset == dataset]
         return pcd['compartment'].unique()
 
-    @functools.lru_cache(datasets_to_cache)
+    @lru_cache(datasets_to_cache)
     def get_variables_and_units(self, dataset):
         """What variables are availabe in a dataset?"""
         df = self.get_dataset(dataset)
@@ -99,7 +102,7 @@ class OvcaBiobank(object):
         # todo: optimize using where?
         return df[df.variable == variable]['name'].iloc[0]
 
-    @functools.lru_cache(maxsize=datasets_to_cache)
+    @lru_cache(maxsize=datasets_to_cache)
     def get_wide(self, dataset, standardized=False):
         """Return dataset in row=variable, column=patient format.
         if @standardized is True Index is always (variable, unit) or (variable, unit, name), and columns always (patient, compartment)
@@ -149,7 +152,7 @@ class OvcaBiobank(object):
                 pass
         return res
 
-    @functools.lru_cache(maxsize=datasets_to_cache)
+    @lru_cache(maxsize=datasets_to_cache)
     def get_excluded_patients(self, dataset):
         """Which patients are excluded from this particular dataset (or globally?"""
         global_exclusion_df = self.get_dataset('clinical/_other_exclusion')
@@ -163,7 +166,7 @@ class OvcaBiobank(object):
             pass
         return excluded
 
-    @functools.lru_cache(maxsize=1)
+    @lru_cache(maxsize=1)
     def get_exclusion_reasons(self):
         """Get exclusion information for all the datasets + globally"""
         result = {}
@@ -192,7 +195,7 @@ class OvcaBiobank(object):
         for name in l:
             yield name, self.get_dataset(name)
 
-    @functools.lru_cache(datasets_to_cache)
+    @lru_cache(datasets_to_cache)
     def get_dataset(self, name):
         """Retrieve a dataset"""
         if name not in self.list_datasets_including_meta():
