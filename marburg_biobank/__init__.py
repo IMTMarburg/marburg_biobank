@@ -44,7 +44,7 @@ class OvcaBiobank(object):
 
     def __init__(self, filename):
         self.filename = filename
-        self.zf = zipfile.ZipFile(filename)
+        self.hdf = pd.HDFStore(filename)
         self._cached_datasets = {}
 
     def get_all_patients(self):
@@ -89,13 +89,13 @@ class OvcaBiobank(object):
     @lazy_member('_cache_list_datasets')
     def list_datasets(self):
         """What datasets to we have"""
-        return sorted([name for name in self.zf.namelist() if
+        return sorted([name for name in self.hdf.keys() if
                        not name.startswith('_') and not os.path.basename(name).startswith('_')])
 
     @lazy_member('_cache_list_datasets_incl_meta')
     def list_datasets_including_meta(self):
         """What datasets to we have"""
-        return sorted(self.zf.namelist())
+        return sorted(self.hdf.keys())
 
     @lazy_member('_datasets_with_name_lookup')
     def datasets_with_name_lookup(self):
@@ -206,8 +206,5 @@ class OvcaBiobank(object):
             raise KeyError("No such dataset: %s.\nAvailable: %s" %
                            (name, self.list_datasets_including_meta()))
         else:
-            fh = self.zf.open(name)
-            try:
-                return pickle.load(fh, encoding='latin1')
-            except TypeError:  # older pickle.load has no encoding, only needed in python3 anyhow
-                return pickle.load(fh)
+            return self.hdf.get(name)
+        
