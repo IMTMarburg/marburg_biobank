@@ -5,6 +5,10 @@ import pandas as pd
 try:
     from functools import lru_cache
 except (ImportError, AttributeError):
+    # don't know how to tell setup.py that we only need functools32 when under 2.7.
+    # so we'll just include a copy (*bergh*)
+    import sys
+    sys.path.append(os.path.join(os.path.dirname(__file__), 'functools32'))
     from functools32 import lru_cache
 try:
     import cPickle as pickle

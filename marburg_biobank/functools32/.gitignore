@@ -1,0 +1,14 @@
+MANIFEST
+build
+dist
+tags
+
+syntax: glob
+
+*.py?
+*.so
+*.sw?
+*~
+.DS_Store
+
+syntax: regexp
