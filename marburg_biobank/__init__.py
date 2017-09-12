@@ -107,10 +107,13 @@ class OvcaBiobank(object):
         return df[df.variable == variable]['name'].iloc[0]
 
     @lru_cache(maxsize=datasets_to_cache)
-    def get_wide(self, dataset, standardized=False):
+    def get_wide(self, dataset, apply_exclusion=True, standardized=False):
         """Return dataset in row=variable, column=patient format.
         if @standardized is True Index is always (variable, unit) or (variable, unit, name), and columns always (patient, compartment)
-        Otherwise, unit and compartment will be left of if there is only a single value for them in the dataset"""
+        Otherwise, unit and compartment will be left of if there is only a single value for them in the dataset
+         if @apply_exclusion is True, excluded patients will be filtered from DataFrame
+        
+        """
         df = self.get_dataset(dataset)
         columns = ['patient']
         index = ['variable']
@@ -120,7 +123,11 @@ class OvcaBiobank(object):
             index.append('unit')
         if 'name' in df.columns:
             index.append('name')
-        return self.to_wide(df, index, columns)
+        dfw = self.to_wide(df, index, columns)
+        if apply_exclusion:
+            return self.apply_exclusion(dataset, dfw)
+        else:
+            return dfw
 
     def to_wide(self, df, index=['variable', ], columns=['patient', 'compartment'], values='value', sort_on_first_level=False):
         """Convert a dataset (or filtered dataset) to a wide DataFrame.
@@ -146,6 +153,8 @@ class OvcaBiobank(object):
         else:
             c = list(c)
         res.columns = c
+        if isinstance(c, list):
+            res.columns.names = columns
         if sort_on_first_level:
             # sort on first level - ie. patient, not compartment - slow though
             res = res[sorted(list(res.columns))]
@@ -158,18 +167,50 @@ class OvcaBiobank(object):
 
     @lru_cache(maxsize=datasets_to_cache)
     def get_excluded_patients(self, dataset):
-        """Which patients are excluded from this particular dataset (or globally?"""
+        """Which patients are excluded from this particular dataset (or globally)?.
+
+        May return a set of patient_id, or (patient_id, compartment) tuples if only 
+        certain compartments where excluded.
+        
+        """
         global_exclusion_df = self.get_dataset('clinical/_other_exclusion')
         excluded = set(global_exclusion_df['patient'].unique())
         # local exclusion from this dataset
         try:
             exclusion_df = self.get_dataset(os.path.dirname(
                 dataset) + '/' + '_' + os.path.basename(dataset) + '_exclusion')
-            excluded.update(exclusion_df['patient'].unique())
+            if 'compartment' in exclusion_df.columns:
+                excluded.update(zip(exclusion_df['patient'], exclusion_df['compartment']))
+            else:
+                excluded.update(exclusion_df['patient'].unique())
         except KeyError:
             pass
         return excluded
 
+    def apply_exclusion(self, dataset_name, df):
+        if not dataset_name in self.list_datasets():
+            raise KeyError(dataset_name)
+        excluded = self.get_excluded_patients(dataset_name)
+        if df.columns.names == ('patient', 'compartment'):
+            to_remove = [x for x in df.columns if x in excluded]
+            return df.drop(to_remove, axis=1) 
+        if df.columns.names == ('patient', ):
+            #single compartment dataset, ignore compartment in excluded
+            excluded = set([x[0] if isinstance(x, tuple) else x for x in excluded])
+            to_remove = [x for x in df.columns if x in excluded]
+            return df.drop(to_remove, axis=1) 
+        elif 'patient' in df.columns and 'compartment' in df.columns:        
+            keep = np.ones((len(df),), np.bool)
+            
+            for x in excluded:
+                if isinstance(x, tuple):
+                    keep = keep & ~((df['patient'] == x[0]) & (df['compartment'] == x[1]))
+                else:
+                    keep = keep & ~(df['patient'] == x)
+            return df[keep]
+        else:
+            raise ValueError("Sorry, not a tall or wide DataFrame that I know how to handle.")
+        
     @lru_cache(maxsize=1)
     def get_exclusion_reasons(self):
         """Get exclusion information for all the datasets + globally"""
@@ -200,7 +241,7 @@ class OvcaBiobank(object):
             yield name, self.get_dataset(name)
 
     @lru_cache(datasets_to_cache)
-    def get_dataset(self, name):
+    def get_dataset(self, name, apply_exclusion=False):
         """Retrieve a dataset"""
         if name not in self.list_datasets_including_meta():
             raise KeyError("No such dataset: %s.\nAvailable: %s" %
@@ -208,7 +249,10 @@ class OvcaBiobank(object):
         else:
             with self.zf.open(name) as op:
                 try:
-                    return pd.read_msgpack(op.read())
+                    df = pd.read_msgpack(op.read())
+                    if apply_exclusion:
+                        df = self.apply_exclusion(name, df)
+                    return df
                 except KeyError as e:
                     if "KeyError: u'category'" in str(e):
                         raise ValueError("Your pandas is too old. You need at least version 0.18")
