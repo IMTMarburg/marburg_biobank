@@ -44,7 +44,7 @@ class OvcaBiobank(object):
 
     def __init__(self, filename):
         self.filename = filename
-        self.hdf = pd.HDFStore(filename)
+        self.zf = zipfile.ZipFile(filename)
         self._cached_datasets = {}
 
     def get_all_patients(self):
@@ -206,5 +206,9 @@ class OvcaBiobank(object):
             raise KeyError("No such dataset: %s.\nAvailable: %s" %
                            (name, self.list_datasets_including_meta()))
         else:
-            return self.hdf.get(name)
-        
+            with self.zf.open(name) as op:
+                try:
+                    return pd.read_msgpack(op.read())
+                except KeyError as e:
+                    if "KeyError: u'category'" in str(e):
+                        raise ValueError("Your pandas is too old. You need at least version 0.18")

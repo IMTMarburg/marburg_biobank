@@ -31,18 +31,39 @@ def check_dataframe(name, df):
         if x:
             raise ValueError("invalid compartment(s) found in %s: %s" % (name, x,))
 
+def fix_the_darn_string(x):
+    if isinstance(x, str):
+        x = x.decode('utf-8')
+    try:
+        return unicode(x)
+    except:
+        print(repr(x))
+        print(type(x))
+        print(x)
+        import pickle
+        with open("debug.dat", 'w') as op:
+            pickle.dump(x, op)
+        raise
 
 def categorical_where_appropriate(df):
     """make sure numerical columns are numeric
-    and string columns that have less than 10% unique values are categoricals"""
+    and string columns that have less than 10% unique values are categorical
+    and everything is unicode!
+
+    """
     for c in df.columns:
         if df.dtypes[c] == object:
             try:
                 df[c] = pd.to_numeric(df[c], errors='raise')
             except ValueError:
-                df[c] = df[c].astype(unicode)
                 if len(df[c].unique()) <= len(df) * 0.1:
                     df[c] = pd.Categorical(df[c])
+                    new_cats = [fix_the_darn_string(x) for x in df[c].cat.categories]
+                    df[c].cat.categories = new_cats
+                else:
+                    df[c] = [fix_the_darn_string(x) for x in df[c]]
+    df.columns = [fix_the_darn_string(x) for x in df.columns]
+    df.index.names = [ fix_the_darn_string(x) for x in df.index.names]
 
 
 def create_biobank(
@@ -59,6 +80,7 @@ def create_biobank(
     for name, df in dict_of_dataframes.items():
         basename = os.path.basename(name)
         check_dataframe(name, df)
+        categorical_where_appropriate(df)
         if not name.startswith('_') and not basename.startswith('_'):
             here = set(
                 df[['patient', 'compartment']].itertuples(index=False, name=None))
@@ -66,17 +88,15 @@ def create_biobank(
                 patient_compartment_dataset['patient'].append(p)
                 patient_compartment_dataset['compartment'].append(c)
                 patient_compartment_dataset['dataset'].append(name)
-            categorical_where_appropriate(df)
+            print ('converting types', name)
             # enforce alphabetical column order after default columns
             df = df[must_have_columns +
                     sorted([x for x in df.columns if x not in must_have_columns])]
     patient_compartment_dataset = pd.DataFrame(patient_compartment_dataset)
     categorical_where_appropriate(patient_compartment_dataset)
-    dict_of_dataframes[
-        '_meta/patient_compartment_dataset'] = pd.DataFrame(patient_compartment_dataset)
-    with zipfile.ZipFile(filename, 'w') as op:
-        for name, df in dict_of_dataframes.items():
-            op.writestr(name, pickle.dumps(df, pickle.HIGHEST_PROTOCOL))
+    zfs = zipfile.ZipFile(filename, 'w')
+    for name, df in dict_of_dataframes.items():
+        zfs.writestr(name, df.to_msgpack())
 
 
 def split_seperate_me(out_df):
