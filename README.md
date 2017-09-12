@@ -58,12 +58,12 @@ the second levels defines the actual method (RNaseq, FACS,...)
 Survival data is in clinical/survival. Please remember: if using [https://pypi.python.org/pypi/lifelines](lifelines), censored and event are negations of each other.
 
 ##Excluded patients:
-Patients are excluded from our studies on two levels.
+Exclusion can either be on a patient, or a patient+compartment level.
+In addition, there is per dataset exclusion and global exclusion.
 
-* On global level (for example because their malignancy was not high grade serous ovarian carcinoma)
-* On a per dataset level.
+Exclusion is by default applied to db.get_wide(), but not to db.get_dataset(),
+you can change the default by passing apply_exclusion=True|False.
 
-To query what patients are excluded use ```db.get_excluded_patients(dataset)```. Dataset may be an empty string, in which case you will receive
-only the globally excluded patients.
-
-```db.get_exclusion_reasons()``` Lists for each patient (and datasets) why they were excluded.
+Exclusion information can be retrieved by db.get_excluded_patients(dataset),
+which return a set of patients (or patient+compartment tuples),
+or db.get_exclusion_reasons(), which lists why the exclusion happend.
