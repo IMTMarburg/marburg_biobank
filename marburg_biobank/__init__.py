@@ -89,13 +89,13 @@ class OvcaBiobank(object):
     @lazy_member('_cache_list_datasets')
     def list_datasets(self):
         """What datasets to we have"""
-        return sorted([name for name in self.hdf.keys() if
+        return sorted([name for name in self.zf.namelist() if
                        not name.startswith('_') and not os.path.basename(name).startswith('_')])
 
     @lazy_member('_cache_list_datasets_incl_meta')
     def list_datasets_including_meta(self):
         """What datasets to we have"""
-        return sorted(self.hdf.keys())
+        return sorted(self.zf.namelist())
 
     @lazy_member('_datasets_with_name_lookup')
     def datasets_with_name_lookup(self):
