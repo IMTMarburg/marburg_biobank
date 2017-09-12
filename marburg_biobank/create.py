@@ -94,6 +94,7 @@ def create_biobank(
                     sorted([x for x in df.columns if x not in must_have_columns])]
     patient_compartment_dataset = pd.DataFrame(patient_compartment_dataset)
     categorical_where_appropriate(patient_compartment_dataset)
+    dict_of_dataframes['_meta/patient_compartment_dataset'] = patient_compartment_dataset
     zfs = zipfile.ZipFile(filename, 'w')
     for name, df in dict_of_dataframes.items():
         zfs.writestr(name, df.to_msgpack())
