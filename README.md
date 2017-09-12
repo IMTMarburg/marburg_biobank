@@ -35,12 +35,12 @@ Using: ```db.get_dataset(dataset)```):
 
 A pandas DataFrame that looks like this
 
-|variable | unit | patient | compartment | value | optional columns...|
-| ------- | ---- | ------- | ----------- | ----- | -----|
-| variableA | unitA | Patient12 | TAM | 23.23|
-| variableA | unitA | Patient12 | TU | 112.2|
-| variableB | unitB | Patient13 | TAM | 3.23|
-| variableB | unitB | Patient13 | TU | 12.2|
+|variable | unit | patient | compartment | value | optional columns...
+| ------- | ---- | ------- | ----------- | ----- | ----- |
+| variableA | unitA | Patient12 | TAM | 23.23| |
+| variableA | unitA | Patient12 | TU | 112.2| |
+| variableB | unitB | Patient13 | TAM | 3.23| |
+| variableB | unitB | Patient13 | TU | 12.2| |
 
 This is the internal storage format.
 

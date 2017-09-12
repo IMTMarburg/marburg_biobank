@@ -21,7 +21,7 @@ AUTHOR = 'Florian Finkernagel'
 
 # What packages are required for this module to be executed?
 REQUIRED = [
-        'pandas=>0.18',
+        'pandas>0.18',
         'numpy',
 ]
 
