@@ -43,7 +43,7 @@ def check_dataframe(name, df):
     for x in 'variable', 'unit':
         if x in df.columns:
             if pd.isnull(df[x]).any():
-                raise ValueError("%s must not be nan" % x)
+                raise ValueError("%s must not be nan in %s" % (x, name))
 
 def fix_the_darn_string(x):
     if isinstance(x, str):
