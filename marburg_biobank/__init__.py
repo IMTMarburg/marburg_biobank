@@ -112,7 +112,7 @@ class OvcaBiobank(object):
         if @standardized is True Index is always (variable, unit) or (variable, unit, name), and columns always (patient, compartment)
         Otherwise, unit and compartment will be left of if there is only a single value for them in the dataset
          if @apply_exclusion is True, excluded patients will be filtered from DataFrame
-        
+
         """
         df = self.get_dataset(dataset)
         columns = ['patient']
@@ -146,7 +146,7 @@ class OvcaBiobank(object):
         c = res.columns
         c = c.droplevel(0)
         # this removes categories from the levels of the index. Absolutly
-        # necessar.
+        # necessary, or you can't add columns later otherwise
         if isinstance(c, pd.MultiIndex):
             c = pd.MultiIndex([list(x) for x in c.levels],
                               labels=c.labels, names=c.names)
@@ -169,9 +169,9 @@ class OvcaBiobank(object):
     def get_excluded_patients(self, dataset):
         """Which patients are excluded from this particular dataset (or globally)?.
 
-        May return a set of patient_id, or (patient_id, compartment) tuples if only 
+        May return a set of patient_id, or (patient_id, compartment) tuples if only
         certain compartments where excluded.
-        
+
         """
         global_exclusion_df = self.get_dataset('clinical/_other_exclusion')
         excluded = set(global_exclusion_df['patient'].unique())
@@ -193,15 +193,15 @@ class OvcaBiobank(object):
         excluded = self.get_excluded_patients(dataset_name)
         if df.columns.names == ('patient', 'compartment'):
             to_remove = [x for x in df.columns if x in excluded]
-            return df.drop(to_remove, axis=1) 
+            return df.drop(to_remove, axis=1)
         if df.columns.names == ('patient', ):
             #single compartment dataset, ignore compartment in excluded
             excluded = set([x[0] if isinstance(x, tuple) else x for x in excluded])
             to_remove = [x for x in df.columns if x in excluded]
-            return df.drop(to_remove, axis=1) 
-        elif 'patient' in df.columns and 'compartment' in df.columns:        
+            return df.drop(to_remove, axis=1)
+        elif 'patient' in df.columns and 'compartment' in df.columns:
             keep = np.ones((len(df),), np.bool)
-            
+
             for x in excluded:
                 if isinstance(x, tuple):
                     keep = keep & ~((df['patient'] == x[0]) & (df['compartment'] == x[1]))
@@ -210,7 +210,7 @@ class OvcaBiobank(object):
             return df[keep]
         else:
             raise ValueError("Sorry, not a tall or wide DataFrame that I know how to handle.")
-        
+
     @lru_cache(maxsize=1)
     def get_exclusion_reasons(self):
         """Get exclusion information for all the datasets + globally"""
@@ -256,3 +256,11 @@ class OvcaBiobank(object):
                 except KeyError as e:
                     if "KeyError: u'category'" in str(e):
                         raise ValueError("Your pandas is too old. You need at least version 0.18")
+
+    def get_comment(self, name):
+        comments = self.get_dataset('_meta/comments')
+        match = comments.path == name
+        if match.any():
+            return comments[match].iloc[0]['comment']
+        else:
+            return ''
