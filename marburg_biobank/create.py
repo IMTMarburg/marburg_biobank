@@ -40,6 +40,10 @@ def check_dataframe(name, df):
             raise ValueError("invalid compartment(s) found in %s: %s" % (name, x,))
     if 'patient' in df.columns:
         [check_patient_id(x) for x in df['patient']]
+    for x in 'variable', 'unit':
+        if x in df.columns:
+            if pd.isnull(df[x]).any():
+                raise ValueError("%s must not be nan" % x)
 
 def fix_the_darn_string(x):
     if isinstance(x, str):
