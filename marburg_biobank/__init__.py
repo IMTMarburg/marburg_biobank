@@ -106,6 +106,18 @@ class OvcaBiobank(object):
         # todo: optimize using where?
         return df[df.variable == variable]['name'].iloc[0]
 
+    def variable_or_name_to_variable_and_unit(self, dataset, variable_or_name):
+        df = self.get_dataset(dataset)[['variable','name','unit']]
+        rows = df[(df.variable == variable_or_name) | (df.name == variable_or_name)]
+        if len(rows['variable'].unique()) > 1:
+            raise ValueError("variable_or_name_to_variable led to multiple variables (%i): %s" % (
+                len(rows['variable'].unique()),
+                rows['variable'].unique(),
+                )
+                )
+        r = rows.iloc[0]
+        return r['variable'], r['unit']
+
     @lru_cache(maxsize=datasets_to_cache)
     def get_wide(self, dataset, apply_exclusion=True, standardized=False):
         """Return dataset in row=variable, column=patient format.
