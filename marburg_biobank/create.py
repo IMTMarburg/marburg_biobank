@@ -1,4 +1,5 @@
 import pandas as pd
+import re
 import pickle
 import zipfile
 import os
@@ -10,8 +11,15 @@ allowed_compartments = {'n.a.', 'ascites',
                         'TU_L','TU_m', 'TU_G', 'TU_s', 'TU_sc',
                         'pMPH',
                         'PBMC',
-
+                        'buffy coat',
+                        'plasma',
                         }
+
+
+def check_patient_id(patient_id):
+    if patient_id.startswith("OVCA"):
+        if not re.match("^OVCA\d+$", patient_id):
+            raise ValueError("Patient id must be OVCA\\d if it starts with OVCA")
 
 
 def check_dataframe(name, df):
@@ -30,6 +38,12 @@ def check_dataframe(name, df):
         x = set(df['compartment'].unique()).difference(allowed_compartments)
         if x:
             raise ValueError("invalid compartment(s) found in %s: %s" % (name, x,))
+    if 'patient' in df.columns:
+        [check_patient_id(x) for x in df['patient']]
+    for x in 'variable', 'unit':
+        if x in df.columns:
+            if pd.isnull(df[x]).any():
+                raise ValueError("%s must not be nan in %s" % (x, name))
 
 def fix_the_darn_string(x):
     if isinstance(x, str):
@@ -114,6 +128,7 @@ def write_dfs(dict_of_dfs):
     """Helper used by the notebooks to dump the dataframes for import"""
     for name, df_and_comment in dict_of_dfs.items():
         df, comment = df_and_comment
+        check_dataframe(name, df)
         d = os.path.dirname(name)
         target_path = os.path.join('../../processed', d)
         if not os.path.exists(target_path):
