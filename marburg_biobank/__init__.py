@@ -115,7 +115,10 @@ class OvcaBiobank(object):
                 rows['variable'].unique(),
                 )
                 )
-        r = rows.iloc[0]
+        try:
+            r = rows.iloc[0]
+        except IndexError:
+            raise KeyError("Not found: %s" % variable_or_name)
         return r['variable'], r['unit']
 
     @lru_cache(maxsize=datasets_to_cache)
