@@ -28,7 +28,8 @@ allowed_tissues = {'blood',
 allowed_disease_states = {
     'cancer',
     'healthy',
-    'benign'
+    'benign',
+    'n.a.',
 
 
 }
