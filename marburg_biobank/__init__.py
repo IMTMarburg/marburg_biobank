@@ -220,9 +220,9 @@ class OvcaBiobank(object):
         # local exclusion from this dataset
         try:
             exclusion_path = os.path.dirname( dataset) + '/' + '_' + os.path.basename(dataset) + '_exclusion'
+            exclusion_df = self.get_dataset(exclusion_path)
         except KeyError:
             return excluded
-        exclusion_df = self.get_dataset(exclusion_path)
         columns = ['patient'] + self.get_dataset_compartment_columns(dataset)
         columns = [x for x in columns if x in exclusion_df.columns]
         res = exclusion_df[columns]

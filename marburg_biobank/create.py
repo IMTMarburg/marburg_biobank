@@ -70,14 +70,15 @@ def check_dataframe(name, df):
             raise ValueError("%s is missing columns: %s, had %s" %
                              (name, missing, df.columns))
 
-    if 'cell' in df.columns and not name.startswith('secondary/'):
-        x = set(df['cell'].unique()).difference(allowed_cells)
-        if x:
-            raise ValueError("invalid cells(s) found in %s: %s" % (name, x,))
-    if 'tissue' in df.columns and not name.startswith('secondary/'):
-        x = set(df['tissue'].unique()).difference(allowed_tissues)
-        if x:
-            raise ValueError("invalid tissue(s) found in %s: %s" % (name, x,))
+    for column, allowed_values in [
+        ('cell', allowed_cells),
+        ('tissue', allowed_tissues),
+        ('disease_state', allowed_disease_states),
+    ]:
+        if column in df.columns and not name.startswith('secondary/'):
+            x = set(df[column].unique()).difference(allowed_values)
+            if x:
+                raise ValueError("invalid %s found in %s: %s" % (column, name, x,))
 
     if 'patient' in df.columns and not name.endswith('_exclusion'):
         states = set([check_patient_id(x) for x in df['patient']])
