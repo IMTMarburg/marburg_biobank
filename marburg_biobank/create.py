@@ -5,45 +5,111 @@ import zipfile
 import os
 
 
-must_have_columns = ['variable', 'unit', 'patient',  'compartment', 'value', ]
-allowed_compartments = {'n.a.', 'ascites',
-                        'TAM', 'TAT', 'TU',
-                        'TU_L','TU_m', 'TU_G', 'TU_s', 'TU_sc',
-                        'pMPH',
-                        'PBMC',
-                        'buffy coat',
-                        'plasma',
-                        }
+# for the primary data
+must_have_columns = ['variable', 'unit', 'value', 'patient', ]
+# for 'secondary' datasets
+must_have_columns_secondary = ['variable', 'unit', 'value']
+allowed_cells = {
+    'n.a',
+    'T',
+    'macrophage',
+    'tumor',
+    'tumor_s',
+    'tumor_sc',
+    'tumor_m',
+    'tumor_L',
+    'tumor_G',
+    'MDSC',
+}
+allowed_tissues = {'blood',
+                   'ascites',
+                   'n.a.'
+                   }
+allowed_disease_states = {
+    'cancer',
+    'healthy',
+    'benign'
+
+
+}
 
 
 def check_patient_id(patient_id):
     if patient_id.startswith("OVCA"):
         if not re.match("^OVCA\d+$", patient_id):
-            raise ValueError("Patient id must be OVCA\\d if it starts with OVCA")
+            raise ValueError(
+                "Patient id must be OVCA\\d if it starts with OVCA")
+        return 'cancer'
+    else:
+        return 'non-cancer'
 
 
 def check_dataframe(name, df):
+    if 'variable' in df.columns:
+        df = df.assign(
+            variable=[x.encode('utf-8') if isinstance(x, str) else x for x in df.variable])
+    for c in 'compartment', 'seperate_me':
+        if c in df.columns:
+            raise ValueError(
+                "%s must no longer be a df column - %s " % (c, name))
     basename = os.path.basename(name)
-    if not basename.startswith('_') and not name.startswith('_'):  # no fixed requirements on _meta dfs
-        missing = set(must_have_columns).difference(df.columns)
+    # no fixed requirements on _meta dfs
+    if not basename.startswith('_') and not name.startswith('_'):
+        if name.startswith('secondary'):
+            mh = set(must_have_columns_secondary)
+        else:
+            mh = set(must_have_columns)
+        missing = mh.difference(df.columns)
         if missing:
-            raise ValueError("%s is missing columns: %s, had %s" % (name, missing, df.columns))
+            raise ValueError("%s is missing columns: %s, had %s" %
+                             (name, missing, df.columns))
     elif name.endswith('_exclusion'):
         mhc = ['patient', 'reason']
         missing = set(mhc).difference(df.columns)
         if missing:
-            raise ValueError("%s is missing columns: %s, had %s" % (name, missing, df.columns))
+            raise ValueError("%s is missing columns: %s, had %s" %
+                             (name, missing, df.columns))
 
-    if 'compartment' in df.columns:
-        x = set(df['compartment'].unique()).difference(allowed_compartments)
+    if 'cell' in df.columns and not name.startswith('secondary/'):
+        x = set(df['cell'].unique()).difference(allowed_cells)
         if x:
-            raise ValueError("invalid compartment(s) found in %s: %s" % (name, x,))
-    if 'patient' in df.columns:
-        [check_patient_id(x) for x in df['patient']]
+            raise ValueError("invalid cells(s) found in %s: %s" % (name, x,))
+    if 'tissue' in df.columns and not name.startswith('secondary/'):
+        x = set(df['tissue'].unique()).difference(allowed_tissues)
+        if x:
+            raise ValueError("invalid tissue(s) found in %s: %s" % (name, x,))
+
+    if 'patient' in df.columns and not name.endswith('_exclusion'):
+        states = set([check_patient_id(x) for x in df['patient']])
+        if len(states) > 1:
+            if 'disease_state' not in df.columns:
+                raise ValueError(
+                    "Datasets mixing cancer and non cancer data need a disease_state column:%s"  % (name,))
+
     for x in 'variable', 'unit':
         if x in df.columns:
             if pd.isnull(df[x]).any():
                 raise ValueError("%s must not be nan in %s" % (x, name))
+    if not basename.startswith('_') and not name.startswith('_'):
+        for vu, group in df.groupby(['variable', 'unit']):
+            variable, unit = vu
+            if unit == 'string':
+                pass
+            elif unit == 'timestamp':
+                for v in group.value:
+                    if not isinstance(v, pd.Timestamp):
+                        raise ValueError(
+                            "Not timestamp data in %s %s" % vu)
+
+            elif unit == 'bool':
+                if set(group.value.unique()) != set([True, False]):
+                    raise ValueError(
+                        "Unexpected values for bool variables in %s %s" % vu)
+            else:
+                for v in group.value:
+                    if not isinstance(v, float) and not isinstance(v, int):
+                        raise ValueError("Non float in %s, %s" % vu)
+
 
 def fix_the_darn_string(x):
     if isinstance(x, str):
@@ -59,25 +125,29 @@ def fix_the_darn_string(x):
             pickle.dump(x, op)
         raise
 
+
 def categorical_where_appropriate(df):
     """make sure numerical columns are numeric
     and string columns that have less than 10% unique values are categorical
     and everything is unicode!
 
     """
+    to_assign = {}
     for c in df.columns:
         if df.dtypes[c] == object:
             try:
-                df[c] = pd.to_numeric(df[c], errors='raise')
-            except ValueError:
+                to_assign[c] = pd.to_numeric(df[c], errors='raise')
+            except (ValueError, TypeError):
                 if len(df[c].unique()) <= len(df) * 0.1:
-                    df[c] = pd.Categorical(df[c])
-                    new_cats = [fix_the_darn_string(x) for x in df[c].cat.categories]
-                    df[c].cat.categories = new_cats
+                    to_assign[c] = pd.Categorical(df[c])
+                    new_cats = [fix_the_darn_string(x) for x in to_assign[c].categories]
+                    to_assign[c].categories = new_cats
                 else:
-                    df[c] = [fix_the_darn_string(x) for x in df[c]]
+                    to_assign[c] = [fix_the_darn_string(x) for x in df[c]]
+    df = df.assign(**to_assign)
     df.columns = [fix_the_darn_string(x) for x in df.columns]
-    df.index.names = [ fix_the_darn_string(x) for x in df.index.names]
+    df.index.names = [fix_the_darn_string(x) for x in df.index.names]
+    return df
 
 
 def create_biobank(
@@ -89,39 +159,30 @@ def create_biobank(
         {'variable': 'biobank', 'value': name, },
         {'variable': 'revision', 'value': revision, },
     ])
-    patient_compartment_dataset = {
-        'patient': [], 'compartment': [], 'dataset': []}
     for name, df in dict_of_dataframes.items():
+        print("handling", name)
         basename = os.path.basename(name)
         check_dataframe(name, df)
-        categorical_where_appropriate(df)
-        if not name.startswith('_') and not basename.startswith('_'):
-            here = set(
-                df[['patient', 'compartment']].itertuples(index=False, name=None))
-            for p, c in here:
-                patient_compartment_dataset['patient'].append(p)
-                patient_compartment_dataset['compartment'].append(c)
-                patient_compartment_dataset['dataset'].append(name)
-            print ('converting types', name)
-            # enforce alphabetical column order after default columns
-            df = df[must_have_columns +
-                    sorted([x for x in df.columns if x not in must_have_columns])]
-    patient_compartment_dataset = pd.DataFrame(patient_compartment_dataset)
-    categorical_where_appropriate(patient_compartment_dataset)
-    dict_of_dataframes['_meta/patient_compartment_dataset'] = patient_compartment_dataset
+        df = categorical_where_appropriate(df)
+        # enforce alphabetical column order after default columns
+        df = df[[x for x in must_have_columns if x in df.columns] +
+                sorted([x for x in df.columns if x not in must_have_columns])]
+        dict_of_dataframes[name] = df
+    print("now writing zip file")
     zfs = zipfile.ZipFile(filename, 'w')
     for name, df in dict_of_dataframes.items():
         zfs.writestr(name, df.to_msgpack())
 
 
-def split_seperate_me(out_df):
+def split_seperate_me(out_df, in_order=['patient', 'tissue']):
     """Helper for creating biobank compatible dataframes.
     splits a column 'seperate_me' with OVCA12-compartment
     into seperate patient and compartment columns"""
-    return out_df.assign(
-        patient=[
-            x[:x.find('-')] if '-' in x else x for x in out_df['seperate_me']],
-        compartment=[x[x.find('-') + 1:] if '-' in x else 'n.a.' for x in out_df['seperate_me']]).drop('seperate_me', axis=1)
+    split = [x.split("-") for x in out_df['seperate_me']]
+    return out_df.assign(**{
+        x: [y[ii] for y in split]
+        for (ii, x) in enumerate(in_order)
+    }).drop('seperate_me', axis=1)
 
 
 def write_dfs(dict_of_dfs):

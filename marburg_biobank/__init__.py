@@ -122,18 +122,25 @@ class OvcaBiobank(object):
         return r['variable'], r['unit']
 
     @lru_cache(maxsize=datasets_to_cache)
-    def get_wide(self, dataset, apply_exclusion=True, standardized=False):
+    def get_wide(self, dataset, apply_exclusion=True, standardized=False, filter_func=None):
         """Return dataset in row=variable, column=patient format.
-        if @standardized is True Index is always (variable, unit) or (variable, unit, name), and columns always (patient, compartment)
+        if @standardized is True Index is always (variable, unit) or (variable, unit, name), and columns always (patient, [tissue, cell])
         Otherwise, unit and compartment will be left of if there is only a single value for them in the dataset
          if @apply_exclusion is True, excluded patients will be filtered from DataFrame
 
+         @filter_func is run on the dataset before converting to wide, it
+         takes a df, returns a modified df
+
         """
         df = self.get_dataset(dataset)
+        if filter_func:
+            df = filter_func(df)
         columns = ['patient']
         index = ['variable']
-        if standardized or len(df.compartment.cat.categories) > 1:
-            columns.append('compartment')
+        if standardized or 'tissue' in df.columns and len(df.tissue.cat.categories) > 1:
+            columns.append('tissue')
+        if standardized or 'cell' in df.columns and len(df.cell.cat.categories) > 1:
+            columns.append('cell')
         if standardized or len(df.unit.cat.categories) > 1:
             index.append('unit')
         if 'name' in df.columns:
@@ -144,7 +151,7 @@ class OvcaBiobank(object):
         else:
             return dfw
 
-    def to_wide(self, df, index=['variable', ], columns=['patient', 'compartment'], values='value', sort_on_first_level=False):
+    def to_wide(self, df, index=['variable', ], columns=['patient', 'tissue', 'cell'],  sort_on_first_level=False):
         """Convert a dataset (or filtered dataset) to a wide DataFrame.
         Preferred to pd.pivot_table manually because it is
            a) faster and
@@ -152,7 +159,7 @@ class OvcaBiobank(object):
            c) makes sure the columns are dtype=float if they contain nothing but floats
 
         index = variable,unit
-        columns = (patient, compartment)
+        columns = (patient, tissue, cell)
         """
         df = df[['value'] + index + columns]
         set_index_on = index + columns
