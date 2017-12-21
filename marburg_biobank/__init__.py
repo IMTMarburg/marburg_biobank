@@ -150,7 +150,12 @@ class OvcaBiobank(object):
         df = self.get_dataset(dataset)
         if filter_func:
             df = filter_func(df)
-        columns = ['patient']
+        if 'vid' in df.columns:
+            columns = ['vid']
+        elif 'patient' in df.columns:
+            columns = ['patient']
+        else:
+            raise ValueError("Do not know how to convert this dataset (neither patient nor vid column). Retrieve it get_dataset() and call to_wide() manually with appropriate parameters.")
         index = ['variable']
         if standardized or 'tissue' in df.columns and len(df.tissue.cat.categories) > 1:
             columns.append('tissue')
@@ -206,7 +211,7 @@ class OvcaBiobank(object):
     def get_excluded_patients(self, dataset):
         """Which patients are excluded from this particular dataset (or globally)?.
 
-        May return a set of patient_id, or (patient_id, compartment) tuples if only
+        May return a set of patient_id, or tuples of (('patient', 'x'y'), ('compartment1', 'xyz'),...) tuples if only
         certain compartments where excluded.
 
         """
@@ -214,37 +219,53 @@ class OvcaBiobank(object):
         excluded = set(global_exclusion_df['patient'].unique())
         # local exclusion from this dataset
         try:
-            exclusion_df = self.get_dataset(os.path.dirname(
-                dataset) + '/' + '_' + os.path.basename(dataset) + '_exclusion')
-            if 'compartment' in exclusion_df.columns:
-                excluded.update(zip(exclusion_df['patient'], exclusion_df['compartment']))
-            else:
-                excluded.update(exclusion_df['patient'].unique())
+            exclusion_path = os.path.dirname( dataset) + '/' + '_' + os.path.basename(dataset) + '_exclusion'
         except KeyError:
-            pass
+            return excluded
+        exclusion_df = self.get_dataset(exclusion_path)
+        columns = ['patient'] + self.get_dataset_compartment_columns(dataset)
+        columns = [x for x in columns if x in exclusion_df.columns]
+        res = exclusion_df[columns]
+        if set(res.columns) == set(['patient']):
+            excluded.update(exclusion_df['patient'].unique())
+        else:
+            for idx, row in exclusion_df.iterrows():
+                d = []
+                for c in columns:
+                    d.append((c, row[c]))
+                excluded.add(tuple(d))
         return excluded
 
     def apply_exclusion(self, dataset_name, df):
-        if not dataset_name in self.list_datasets():
+        if dataset_name not in self.list_datasets():
             raise KeyError(dataset_name)
         excluded = self.get_excluded_patients(dataset_name)
-        if df.columns.names == ('patient', 'compartment'):
-            to_remove = [x for x in df.columns if x in excluded]
-            return df.drop(to_remove, axis=1)
-        if df.columns.names == ('patient', ):
-            #single compartment dataset, ignore compartment in excluded
-            excluded = set([x[0] if isinstance(x, tuple) else x for x in excluded])
-            to_remove = [x for x in df.columns if x in excluded]
-            return df.drop(to_remove, axis=1)
-        elif 'patient' in df.columns and 'compartment' in df.columns:
+        columns = ['patient'] + self.get_dataset_compartment_columns(dataset_name)
+        if 'patient' in df.columns: #  a tall dataset
             keep = np.ones((len(df),), np.bool)
-
             for x in excluded:
                 if isinstance(x, tuple):
-                    keep = keep & ~((df['patient'] == x[0]) & (df['compartment'] == x[1]))
+                    matching = np.ones((len(df),), np.bool)
+                    for column, value in x:
+                        matching &= df[column] == value
+                    keep = keep & ~ matching
                 else:
                     keep = keep & ~(df['patient'] == x)
             return df[keep]
+        elif df.index.names[0] == 'variable': # a wide dataset...
+            to_remove = []
+            for c in df.columns:
+                if isinstance(c, tuple):
+                    if c[0] in excluded: # patient totaly excluded 
+                        to_remove.append(c)
+                    else:
+                        key = tuple(zip(df.columns.names, c))
+                        if key in excluded:
+                            to_remove.append(c)
+                else:
+                    if c in excluded:
+                        to_remove.append(c)
+            return df.drop(to_remove, axis=1)
         else:
             raise ValueError("Sorry, not a tall or wide DataFrame that I know how to handle.")
 
