@@ -67,9 +67,24 @@ class OvcaBiobank(object):
     @lru_cache(datasets_to_cache)
     def get_dataset_compartments(self, dataset):
         """Get available compartments in dataset @dataset"""
-        pcd = self.get_dataset('_meta/patient_compartment_dataset')
-        pcd = pcd[pcd.dataset == dataset]
-        return pcd['compartment'].unique()
+        ds = self.get_dataset(dataset)
+        columns = self.get_dataset_compartment_columns(dataset)
+        if not columns:
+            return []
+        else:
+            sub_ds = ds[columns]
+            sub_ds = sub_ds[~sub_ds.duplicated()]
+            result = []
+            for dummy_idx, row in sub_ds.iterrows():
+                result.append(tuple([row[x] for x in columns]))
+            return set(result)
+
+    @lru_cache(datasets_to_cache)
+    def get_dataset_compartment_columns(self, dataset):
+        """Get available compartments columns in dataset @dataset"""
+        ds = self.get_dataset(dataset)
+        columns = [x for x in ['tissue','cell', 'disease_state', 'compartment'] if x in ds]  # compartment included for older datasets
+        return columns
 
     @lru_cache(datasets_to_cache)
     def get_variables_and_units(self, dataset):
@@ -281,6 +296,8 @@ class OvcaBiobank(object):
 
     def get_comment(self, name):
         comments = self.get_dataset('_meta/comments')
+        if len(comments) == 0:
+            return ''
         match = comments.path == name
         if match.any():
             return comments[match].iloc[0]['comment']
