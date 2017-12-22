@@ -16,7 +16,6 @@ except ImportError:
     import pickle
 
 datasets_to_cache = 32
-known_compartment_columns = ['tissue','cell', 'disease_state', 'compartment']
 
 
 def lazy_member(field):
@@ -63,7 +62,7 @@ class OvcaBiobank(object):
     def get_compartments(self):
         """Get all compartments we have data for"""
         pcd = self.get_dataset('_meta/patient_compartment_dataset')
-        return pcd['compartment'].unique()
+        return []
 
     @lru_cache(datasets_to_cache)
     def get_dataset_compartments(self, dataset):
@@ -84,7 +83,7 @@ class OvcaBiobank(object):
     def get_dataset_compartment_columns(self, dataset):
         """Get available compartments columns in dataset @dataset"""
         ds = self.get_dataset(dataset)
-        columns = [x for x in known_compartment_columns if x in ds]  # compartment included for older datasets
+        columns = [x for x in ['tissue','cell', 'disease_state', 'compartment'] if x in ds]  # compartment included for older datasets
         return columns
 
     @lru_cache(datasets_to_cache)
@@ -140,7 +139,7 @@ class OvcaBiobank(object):
     @lru_cache(maxsize=datasets_to_cache)
     def get_wide(self, dataset, apply_exclusion=True, standardized=False, filter_func=None):
         """Return dataset in row=variable, column=patient format.
-        if @standardized is True Index is always (variable, unit) or (variable, unit, name), and columns always (patient, [tissue, cell])
+        if @standardized is True Index is always (variable, unit) or (variable, unit, name), and columns always (patient, [tissue, cell, disease_state])
         Otherwise, unit and compartment will be left of if there is only a single value for them in the dataset
          if @apply_exclusion is True, excluded patients will be filtered from DataFrame
 
@@ -151,17 +150,21 @@ class OvcaBiobank(object):
         df = self.get_dataset(dataset)
         if filter_func:
             df = filter_func(df)
-        if 'vid' in df.columns:
+        if 'vid' in df.columns and not 'patient' in df.columns:
             columns = ['vid']
         elif 'patient' in df.columns:
             columns = ['patient']
         else:
             raise ValueError("Do not know how to convert this dataset (neither patient nor vid column). Retrieve it get_dataset() and call to_wide() manually with appropriate parameters.")
         index = ['variable']
-        if standardized or 'tissue' in df.columns and len(df.tissue.cat.categories) > 1:
-            columns.append('tissue')
-        if standardized or 'cell' in df.columns and len(df.cell.cat.categories) > 1:
-            columns.append('cell')
+        for x in ['tissue','cell','disease_state']:
+            if standardized or x in df.columns:
+                columns.append(x)
+                if x in df.columns and len(df[x].cat.categories) > 1:
+                    pass
+                else:
+                    df = df.assign(**{x: np.nan})
+
         if standardized or len(df.unit.cat.categories) > 1:
             index.append('unit')
         if 'name' in df.columns:
@@ -202,8 +205,8 @@ class OvcaBiobank(object):
             # sort on first level - ie. patient, not compartment - slow though
             res = res[sorted(list(res.columns))]
         for c in res.columns:
-            x = res[c]
-            x[x.values == None] = np.nan
+            x = res[c] 
+            x[x.values == None] = np.nan 
             try:
                 res[c] = x.astype(float)
             except ValueError:
