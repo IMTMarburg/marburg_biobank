@@ -17,7 +17,7 @@ except ImportError:
 
 datasets_to_cache = 32
 
-known_compartment_columns = ['tissue','cell', 'disease_state', ]
+known_compartment_columns = ['tissue','cell', 'disease_state','compartment' ] # compartment only for backward compability
 
 
 def lazy_member(field):
@@ -160,7 +160,7 @@ class OvcaBiobank(object):
             raise ValueError("Do not know how to convert this dataset (neither patient nor vid column). Retrieve it get_dataset() and call to_wide() manually with appropriate parameters.")
         index = ['variable']
         for x in known_compartment_columns:
-            if standardized or x in df.columns:
+            if x in df.columns or (standardized and x != 'compartment'):
                 columns.append(x)
                 if x in df.columns and len(df[x].cat.categories) > 1:
                     pass
@@ -177,7 +177,7 @@ class OvcaBiobank(object):
         else:
             return dfw
 
-    def to_wide(self, df, index=['variable', ], columns=['patient', 'tissue', 'cell'],  sort_on_first_level=False):
+    def to_wide(self, df, index=['variable', ], columns=known_compartment_columns,  sort_on_first_level=False):
         """Convert a dataset (or filtered dataset) to a wide DataFrame.
         Preferred to pd.pivot_table manually because it is
            a) faster and
