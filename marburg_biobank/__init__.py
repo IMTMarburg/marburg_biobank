@@ -16,6 +16,7 @@ except ImportError:
     import pickle
 
 datasets_to_cache = 32
+known_compartment_columns = ['tissue','cell', 'disease_state', 'compartment']
 
 
 def lazy_member(field):
@@ -83,7 +84,7 @@ class OvcaBiobank(object):
     def get_dataset_compartment_columns(self, dataset):
         """Get available compartments columns in dataset @dataset"""
         ds = self.get_dataset(dataset)
-        columns = [x for x in ['tissue','cell', 'disease_state', 'compartment'] if x in ds]  # compartment included for older datasets
+        columns = [x for x in known_compartment_columns if x in ds]  # compartment included for older datasets
         return columns
 
     @lru_cache(datasets_to_cache)
@@ -201,8 +202,10 @@ class OvcaBiobank(object):
             # sort on first level - ie. patient, not compartment - slow though
             res = res[sorted(list(res.columns))]
         for c in res.columns:
+            x = res[c]
+            x[x.values == None] = np.nan
             try:
-                res[c] = res[c].astype(float)
+                res[c] = x.astype(float)
             except ValueError:
                 pass
         return res

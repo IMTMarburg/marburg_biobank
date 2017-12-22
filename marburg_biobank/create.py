@@ -1,8 +1,11 @@
 import pandas as pd
+import time
 import re
 import pickle
 import zipfile
 import os
+import collections
+
 
 
 # for the primary data
@@ -108,9 +111,11 @@ def check_dataframe(name, df):
                     raise ValueError(
                         "Unexpected values for bool variables in %s %s" % vu)
             else:
-                for v in group.value:
-                    if not isinstance(v, float) and not isinstance(v, int):
-                        raise ValueError("Non float in %s, %s" % vu)
+                if not ((group.value.dtype == int) & (group.value.dtype == float)): #might not be floaty enough
+                    for v in group.value:
+                        if not isinstance(v, float) and not isinstance(v, int):
+                            raise ValueError("Non float in %s, %s" % vu)
+
 
 
 def fix_the_darn_string(x):
@@ -151,6 +156,22 @@ def categorical_where_appropriate(df):
     df.index.names = [fix_the_darn_string(x) for x in df.index.names]
     return df
 
+def extract_patient_compartment_meta(dict_of_dfs):
+    output = []
+    from . import known_compartment_columns
+    columns = ['patient'] + known_compartment_columns
+    for name in dict_of_dfs:
+        if (not name.startswith('secondary/') and 
+            not name.startswith('_') and not 
+            os.path.basename(name).startswith('_')):
+            df = dict_of_dfs[name]
+            subset = df[[x for x in columns if x in df.columns]]
+            subset = subset[~subset.duplicated()]
+            for idx, row in subset.iterrows():
+                row[u'dataset'] = unicode(name)
+                output.append(row)
+    return pd.DataFrame(output)
+
 
 def create_biobank(
         dict_of_dataframes, name, revision, filename):
@@ -164,16 +185,37 @@ def create_biobank(
     for name, df in dict_of_dataframes.items():
         print("handling", name)
         basename = os.path.basename(name)
+        s = time.time()
         check_dataframe(name, df)
+        print('check time', time.time() - s)
+        s = time.time()
         df = categorical_where_appropriate(df)
+        print('cat time', time.time() - s)
+        s = time.time()
         # enforce alphabetical column order after default columns
         df = df[[x for x in must_have_columns if x in df.columns] +
                 sorted([x for x in df.columns if x not in must_have_columns])]
+        print('column order time', time.time() - s)
         dict_of_dataframes[name] = df
+    s = time.time()
+    dict_of_dataframes["_meta/patient_compartment_dataset"] = extract_patient_compartment_meta(dict_of_dataframes)
+    print("patient_compartment_dataset_time", time.time() - s)
     print("now writing zip file")
     zfs = zipfile.ZipFile(filename, 'w')
     for name, df in dict_of_dataframes.items():
         zfs.writestr(name, df.to_msgpack())
+    #one last check it's all numbers...
+    print("checking float")
+    from . import OvcaBiobank
+    bb = OvcaBiobank(filename)
+    for ds in bb.list_datasets():
+        print ds
+        df = bb.get_wide(ds, filter_func=lambda df: df[~df.unit.isin(['timestamp','string', 'bool'])])
+        #df = bb.get_wide(ds)    
+        for idx, row in df.iterrows():
+	    if row.dtype != float:
+	        print("Error in %s %s, dtype was %s" % (ds, idx, row.dtype))    
+
 
 
 def split_seperate_me(out_df, in_order=['patient', 'tissue']):
@@ -198,5 +240,5 @@ def write_dfs(dict_of_dfs):
             os.makedirs(target_path)
         fn = os.path.join(target_path, os.path.basename(name))
         df.to_pickle(fn)
-        with open(fn, 'a') as op:
+	with open(fn, 'a') as op:
             pickle.dump(comment, op, pickle.HIGHEST_PROTOCOL)
