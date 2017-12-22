@@ -105,7 +105,6 @@ def check_dataframe(name, df):
                     if not isinstance(v, pd.Timestamp):
                         raise ValueError(
                             "Not timestamp data in %s %s" % vu)
-
             elif unit == 'bool':
                 if set(group.value.unique()) != set([True, False]):
                     raise ValueError(
@@ -119,6 +118,8 @@ def check_dataframe(name, df):
 
 
 def fix_the_darn_string(x):
+    if isinstance(x, bool):
+        return x
     if isinstance(x, str):
         x = x.decode('utf-8')
     try:
@@ -204,11 +205,14 @@ def create_biobank(
     zfs = zipfile.ZipFile(filename, 'w')
     for name, df in dict_of_dataframes.items():
         zfs.writestr(name, df.to_msgpack())
+    zfs.close()
     #one last check it's all numbers...
     print("checking float")
     from . import OvcaBiobank
     bb = OvcaBiobank(filename)
     for ds in bb.list_datasets():
+        if ds.startswith('secondary/'):
+            continue
         print ds
         df = bb.get_wide(ds, filter_func=lambda df: df[~df.unit.isin(['timestamp','string', 'bool'])])
         #df = bb.get_wide(ds)    
