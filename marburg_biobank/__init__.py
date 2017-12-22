@@ -85,7 +85,7 @@ class OvcaBiobank(object):
     def get_dataset_compartment_columns(self, dataset):
         """Get available compartments columns in dataset @dataset"""
         ds = self.get_dataset(dataset)
-        columns = [x for x in known_compartment_columns + ['compartment'] if x in ds]  # compartment included for older datasets
+        columns = [x for x in known_compartment_columns  if x in ds]  # compartment included for older datasets
         return columns
 
     @lru_cache(datasets_to_cache)
