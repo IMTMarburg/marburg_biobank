@@ -206,7 +206,7 @@ class OvcaBiobank(object):
             res = res[sorted(list(res.columns))]
         for c in res.columns:
             x = res[c] 
-            x[x.values == None] = np.nan 
+            x.loc[x.values == None] = np.nan 
             try:
                 res[c] = x.astype(float)
             except ValueError:
