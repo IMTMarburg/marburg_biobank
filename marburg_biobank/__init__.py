@@ -161,9 +161,11 @@ class OvcaBiobank(object):
         index = ['variable']
         for x in known_compartment_columns:
             if x in df.columns or (standardized and x != 'compartment'):
-                columns.append(x)
-                #what is this good for?
-                if x in df.columns and (not hasattr(df[x], 'cat') or  len(df[x].cat.categories) > 1):
+                if not x in columns:
+                    columns.append(x)
+                if (x in df.columns and (
+                        (hasattr(df[x], 'cat') and (len(df[x].cat.categories) > 1))or
+                        (len(df[x].unique()) > 1))):
                     pass
                 else:
                     df = df.assign(**{x: np.nan})
