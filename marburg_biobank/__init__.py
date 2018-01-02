@@ -17,7 +17,7 @@ except ImportError:
 
 datasets_to_cache = 32
 
-known_compartment_columns = ['tissue','cell', 'disease_state','compartment' ] # compartment only for backward compability
+known_compartment_columns = ['patient', 'tissue','cell', 'disease_state','compartment' ] # compartment only for backward compability
 
 
 def lazy_member(field):
