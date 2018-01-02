@@ -39,7 +39,7 @@ if os.path.exists(os.path.join(here, 'README.md')):
             import pypandoc
             with io.open(os.path.join(here, 'README.rst'), 'w', encoding='utf-8') as of:
                 of.write(pypandoc.convert('README.md', 'rst'))
-        except (OSError, ImportError):
+        except (OSError, ImportError, IOError):
             print("Pandoc not available. Readme not updated")
 
 with io.open(os.path.join(here, 'README.rst'), encoding='utf-8') as f:
