@@ -8,7 +8,6 @@ import io
 import os
 import sys
 from shutil import rmtree
-import pandoc
 
 from setuptools import find_packages, setup, Command
 
