@@ -212,11 +212,12 @@ class OvcaBiobank(object):
             # sort on first level - ie. patient, not compartment - slow though
             res = res[sorted(list(res.columns))]
         for c in res.columns:
-            x = res[c] 
-            x.loc[x.values == None] = np.nan 
+            x = res[c].fillna(value=np.nan, inplace=False)
+            if (x == None).any():
+                raise ValueError("here")
             try:
                 res[c] = x.astype(float)
-            except ValueError:
+            except ValueError: # leaving the Nones as Nones
                 pass
         return res
 
