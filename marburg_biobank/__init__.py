@@ -187,6 +187,8 @@ class OvcaBiobank(object):
         index = variable,unit
         columns = (patient, tissue, cell)
         """
+        if columns == known_compartment_columns:
+            columns = [x for x in columns if x in df.columns]
         df = df[['value'] + index + columns]
         set_index_on = index + columns
         columns_pos = tuple(range(len(index), len(index) + len(columns)))
