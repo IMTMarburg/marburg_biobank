@@ -8,7 +8,6 @@ import io
 import os
 import sys
 from shutil import rmtree
-import pandoc
 
 from setuptools import find_packages, setup, Command
 
@@ -34,13 +33,14 @@ here = os.path.abspath(os.path.dirname(__file__))
 
 # Import the README and use it as the long-description.
 # Note: this will only work if 'README.rst' is present in your MANIFEST.in file!
-with io.open(os.path.join(here, 'README.md'), encoding='utf-8') as f:
-    try:
-        import pypandoc
-        with io.open(os.path.join(here, 'README.rst'), 'w', encoding='utf-8') as of:
-            of.write(pypandoc.convert('README.md', 'rst'))
-    except (OSError, ImportError):
-        print("Pandoc not available. Readme not updated")
+if os.path.exists(os.path.join(here, 'README.md')):
+    with io.open(os.path.join(here, 'README.md'), encoding='utf-8') as f:
+        try:
+            import pypandoc
+            with io.open(os.path.join(here, 'README.rst'), 'w', encoding='utf-8') as of:
+                of.write(pypandoc.convert('README.md', 'rst'))
+        except (OSError, ImportError, IOError):
+            print("Pandoc not available. Readme not updated")
 
 with io.open(os.path.join(here, 'README.rst'), encoding='utf-8') as f:
         long_description = '\n' + f.read()

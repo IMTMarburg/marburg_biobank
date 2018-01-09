@@ -17,7 +17,9 @@ except ImportError:
 
 datasets_to_cache = 32
 
-known_compartment_columns = ['tissue','cell', 'disease_state','compartment' ] # compartment only for backward compability
+known_compartment_columns = ['compartment','cell_type', 'disease', 
+        #these are only for backward compability
+        'tissue', 'disease-state',]  # tissue 
 
 
 def lazy_member(field):
@@ -141,7 +143,7 @@ class OvcaBiobank(object):
     @lru_cache(maxsize=datasets_to_cache)
     def get_wide(self, dataset, apply_exclusion=True, standardized=False, filter_func=None):
         """Return dataset in row=variable, column=patient format.
-        if @standardized is True Index is always (variable, unit) or (variable, unit, name), and columns always (patient, [tissue, cell, disease_state])
+        if @standardized is True Index is always (variable, unit) or (variable, unit, name), and columns always (patient, [compartment, cell_type, disease])
         Otherwise, unit and compartment will be left of if there is only a single value for them in the dataset
          if @apply_exclusion is True, excluded patients will be filtered from DataFrame
 
@@ -161,8 +163,11 @@ class OvcaBiobank(object):
         index = ['variable']
         for x in known_compartment_columns:
             if x in df.columns or (standardized and x != 'compartment'):
-                columns.append(x)
-                if x in df.columns and len(df[x].cat.categories) > 1:
+                if not x in columns:
+                    columns.append(x)
+                if (x in df.columns and (
+                        (hasattr(df[x], 'cat') and (len(df[x].cat.categories) > 1))or
+                        (len(df[x].unique()) > 1))):
                     pass
                 else:
                     df = df.assign(**{x: np.nan})
@@ -185,8 +190,10 @@ class OvcaBiobank(object):
            c) makes sure the columns are dtype=float if they contain nothing but floats
 
         index = variable,unit
-        columns = (patient, tissue, cell)
+        columns = (patient, compartment, cell_type)
         """
+        if columns == known_compartment_columns:
+            columns = [x for x in columns if x in df.columns]
         df = df[['value'] + index + columns]
         set_index_on = index + columns
         columns_pos = tuple(range(len(index), len(index) + len(columns)))
@@ -207,11 +214,12 @@ class OvcaBiobank(object):
             # sort on first level - ie. patient, not compartment - slow though
             res = res[sorted(list(res.columns))]
         for c in res.columns:
-            x = res[c] 
-            x.loc[x.values == None] = np.nan 
+            x = res[c].fillna(value=np.nan, inplace=False)
+            if (x == None).any():
+                raise ValueError("here")
             try:
                 res[c] = x.astype(float)
-            except ValueError:
+            except ValueError: # leaving the Nones as Nones
                 pass
         return res
 
