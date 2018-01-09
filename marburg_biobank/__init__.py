@@ -17,7 +17,9 @@ except ImportError:
 
 datasets_to_cache = 32
 
-known_compartment_columns = ['compartment','cell_type', 'disease', ]
+known_compartment_columns = ['compartment','cell_type', 'disease', 
+        #these are only for backward compability
+        'tissue', 'disease-state',]  # tissue 
 
 
 def lazy_member(field):
@@ -160,9 +162,12 @@ class OvcaBiobank(object):
             raise ValueError("Do not know how to convert this dataset (neither patient nor vid column). Retrieve it get_dataset() and call to_wide() manually with appropriate parameters.")
         index = ['variable']
         for x in known_compartment_columns:
-            if standardized or x in df.columns:
-                columns.append(x)
-                if x in df.columns and len(df[x].cat.categories) > 1:
+            if x in df.columns or (standardized and x != 'compartment'):
+                if not x in columns:
+                    columns.append(x)
+                if (x in df.columns and (
+                        (hasattr(df[x], 'cat') and (len(df[x].cat.categories) > 1))or
+                        (len(df[x].unique()) > 1))):
                     pass
                 else:
                     df = df.assign(**{x: np.nan})
@@ -177,7 +182,7 @@ class OvcaBiobank(object):
         else:
             return dfw
 
-    def to_wide(self, df, index=['variable', ], columns=['patient', 'compartment', 'cell_type'],  sort_on_first_level=False):
+    def to_wide(self, df, index=['variable', ], columns=known_compartment_columns,  sort_on_first_level=False):
         """Convert a dataset (or filtered dataset) to a wide DataFrame.
         Preferred to pd.pivot_table manually because it is
            a) faster and
@@ -187,6 +192,8 @@ class OvcaBiobank(object):
         index = variable,unit
         columns = (patient, compartment, cell_type)
         """
+        if columns == known_compartment_columns:
+            columns = [x for x in columns if x in df.columns]
         df = df[['value'] + index + columns]
         set_index_on = index + columns
         columns_pos = tuple(range(len(index), len(index) + len(columns)))
@@ -207,11 +214,12 @@ class OvcaBiobank(object):
             # sort on first level - ie. patient, not compartment - slow though
             res = res[sorted(list(res.columns))]
         for c in res.columns:
-            x = res[c] 
-            x.loc[x.values == None] = np.nan 
+            x = res[c].fillna(value=np.nan, inplace=False)
+            if (x == None).any():
+                raise ValueError("here")
             try:
                 res[c] = x.astype(float)
-            except ValueError:
+            except ValueError: # leaving the Nones as Nones
                 pass
         return res
 
