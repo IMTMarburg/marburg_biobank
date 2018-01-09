@@ -13,7 +13,6 @@ must_have_columns = ['variable', 'unit', 'value', 'patient', ]
 # for 'secondary' datasets
 must_have_columns_secondary = ['variable', 'unit', 'value']
 allowed_cells = {
-    'n.a',
     'T',
     'macrophage',
     'tumor',
@@ -23,6 +22,7 @@ allowed_cells = {
     'tumor_L',
     'tumor_G',
     'MDSC',
+    'n.a.'
 }
 allowed_tissues = {'blood',
                    'ascites',
@@ -52,10 +52,14 @@ def check_dataframe(name, df):
     if 'variable' in df.columns:
         df = df.assign(
             variable=[x.encode('utf-8') if isinstance(x, str) else x for x in df.variable])
-    for c in 'compartment', 'seperate_me':
+    for c in 'seperate_me':
         if c in df.columns:
             raise ValueError(
                 "%s must no longer be a df column - %s " % (c, name))
+    if 'compartment' in df.columns and not 'disease' in df.columns:
+        raise ValueError("Columns must now be cell_type/disease/compartment split")
+    if 'patient' in df.columns and df['patient'].str.startswith('OC').any():
+        raise ValueError("No patient may start with OC. - check if they've been 'OVCA'-ified") #
     basename = os.path.basename(name)
     # no fixed requirements on _meta dfs
     if not basename.startswith('_') and not name.startswith('_'):
@@ -63,6 +67,11 @@ def check_dataframe(name, df):
             mh = set(must_have_columns_secondary)
         else:
             mh = set(must_have_columns)
+            for c in 'cell', 'disease_state', 'tissue':
+                if c in df.columns:
+                    raise ValueError(
+                        "%s must no longer be a df column - %s " % (c, name))
+
         missing = mh.difference(df.columns)
         if missing:
             raise ValueError("%s is missing columns: %s, had %s" %
@@ -75,9 +84,9 @@ def check_dataframe(name, df):
                              (name, missing, df.columns))
 
     for column, allowed_values in [
-        ('cell', allowed_cells),
-        ('tissue', allowed_tissues),
-        ('disease_state', allowed_disease_states),
+        ('cell_type', allowed_cells),
+        ('compartment', allowed_tissues),
+        ('disease', allowed_disease_states),
     ]:
         if column in df.columns and not name.startswith('secondary/'):
             x = set(df[column].unique()).difference(allowed_values)
@@ -87,9 +96,9 @@ def check_dataframe(name, df):
     if 'patient' in df.columns and not name.endswith('_exclusion'):
         states = set([check_patient_id(x) for x in df['patient']])
         if len(states) > 1:
-            if 'disease_state' not in df.columns:
+            if 'disease' not in df.columns:
                 raise ValueError(
-                    "Datasets mixing cancer and non cancer data need a disease_state column:%s"  % (name,))
+                    "Datasets mixing cancer and non cancer data need a disease column:%s"  % (name,))
 
     for x in 'variable', 'unit':
         if x in df.columns:
@@ -146,7 +155,7 @@ def categorical_where_appropriate(df):
             try:
                 to_assign[c] = pd.to_numeric(df[c], errors='raise')
             except (ValueError, TypeError):
-                if len(df[c].unique()) <= len(df) * 0.1:
+                if len(df[c].unique()) <= len(df) * 0.3 or c == 'patient':
                     to_assign[c] = pd.Categorical(df[c])
                     new_cats = [fix_the_darn_string(x) for x in to_assign[c].categories]
                     to_assign[c].categories = new_cats
@@ -222,7 +231,7 @@ def create_biobank(
 
 
 
-def split_seperate_me(out_df, in_order=['patient', 'tissue']):
+def split_seperate_me(out_df, in_order=['patient', 'compartment']):
     """Helper for creating biobank compatible dataframes.
     splits a column 'seperate_me' with OVCA12-compartment
     into seperate patient and compartment columns"""

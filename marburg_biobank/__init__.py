@@ -17,7 +17,7 @@ except ImportError:
 
 datasets_to_cache = 32
 
-known_compartment_columns = ['tissue','cell', 'disease_state', ]
+known_compartment_columns = ['compartment','cell_type', 'disease', ]
 
 
 def lazy_member(field):
@@ -141,7 +141,7 @@ class OvcaBiobank(object):
     @lru_cache(maxsize=datasets_to_cache)
     def get_wide(self, dataset, apply_exclusion=True, standardized=False, filter_func=None):
         """Return dataset in row=variable, column=patient format.
-        if @standardized is True Index is always (variable, unit) or (variable, unit, name), and columns always (patient, [tissue, cell, disease_state])
+        if @standardized is True Index is always (variable, unit) or (variable, unit, name), and columns always (patient, [compartment, cell_type, disease])
         Otherwise, unit and compartment will be left of if there is only a single value for them in the dataset
          if @apply_exclusion is True, excluded patients will be filtered from DataFrame
 
@@ -177,7 +177,7 @@ class OvcaBiobank(object):
         else:
             return dfw
 
-    def to_wide(self, df, index=['variable', ], columns=['patient', 'tissue', 'cell'],  sort_on_first_level=False):
+    def to_wide(self, df, index=['variable', ], columns=['patient', 'compartment', 'cell_type'],  sort_on_first_level=False):
         """Convert a dataset (or filtered dataset) to a wide DataFrame.
         Preferred to pd.pivot_table manually because it is
            a) faster and
@@ -185,7 +185,7 @@ class OvcaBiobank(object):
            c) makes sure the columns are dtype=float if they contain nothing but floats
 
         index = variable,unit
-        columns = (patient, tissue, cell)
+        columns = (patient, compartment, cell_type)
         """
         df = df[['value'] + index + columns]
         set_index_on = index + columns
