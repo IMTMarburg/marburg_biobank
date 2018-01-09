@@ -17,7 +17,9 @@ except ImportError:
 
 datasets_to_cache = 32
 
-known_compartment_columns = ['patient', 'tissue','cell', 'disease_state','compartment' ] # compartment only for backward compability
+known_compartment_columns = ['compartment','cell_type', 'disease', 
+        #these are only for backward compability
+        'tissue', 'disease-state',]  # tissue 
 
 
 def lazy_member(field):
@@ -85,7 +87,7 @@ class OvcaBiobank(object):
     def get_dataset_compartment_columns(self, dataset):
         """Get available compartments columns in dataset @dataset"""
         ds = self.get_dataset(dataset)
-        columns = [x for x in known_compartment_columns + ['compartment'] if x in ds]  # compartment included for older datasets
+        columns = [x for x in known_compartment_columns  if x in ds.columns]  # compartment included for older datasets
         return columns
 
     @lru_cache(datasets_to_cache)
@@ -141,7 +143,7 @@ class OvcaBiobank(object):
     @lru_cache(maxsize=datasets_to_cache)
     def get_wide(self, dataset, apply_exclusion=True, standardized=False, filter_func=None):
         """Return dataset in row=variable, column=patient format.
-        if @standardized is True Index is always (variable, unit) or (variable, unit, name), and columns always (patient, [tissue, cell, disease_state])
+        if @standardized is True Index is always (variable, unit) or (variable, unit, name), and columns always (patient, [compartment, cell_type, disease])
         Otherwise, unit and compartment will be left of if there is only a single value for them in the dataset
          if @apply_exclusion is True, excluded patients will be filtered from DataFrame
 
@@ -188,7 +190,7 @@ class OvcaBiobank(object):
            c) makes sure the columns are dtype=float if they contain nothing but floats
 
         index = variable,unit
-        columns = (patient, tissue, cell)
+        columns = (patient, compartment, cell_type)
         """
         if columns == known_compartment_columns:
             columns = [x for x in columns if x in df.columns]
