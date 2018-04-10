@@ -65,6 +65,8 @@ def check_dataframe(name, df):
     if not basename.startswith('_') and not name.startswith('_'):
         if name.startswith('secondary'):
             mh = set(must_have_columns_secondary)
+        elif name.startswith('tertiary'):
+            mh = set()
         else:
             mh = set(must_have_columns)
             for c in 'cell', 'disease_state', 'tissue':
@@ -104,7 +106,12 @@ def check_dataframe(name, df):
         if x in df.columns:
             if pd.isnull(df[x]).any():
                 raise ValueError("%s must not be nan in %s" % (x, name))
-    if not basename.startswith('_') and not name.startswith('_'):
+            if df[x].str.startswith(' ').any():
+                raise ValueError("At least one %s started with a space" % x)
+            if df[x].str.endswith(' ').any():
+                raise ValueError("At least one %s ended with a space" % x)
+
+    if not basename.startswith('_') and not name.startswith('_') and not name.startswith('tertiary'):
         for vu, group in df.groupby(['variable', 'unit']):
             variable, unit = vu
             if unit == 'string':
