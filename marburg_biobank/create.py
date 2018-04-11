@@ -12,6 +12,9 @@ import collections
 must_have_columns = ['variable', 'unit', 'value', 'patient', ]
 # for 'secondary' datasets
 must_have_columns_secondary = ['variable', 'unit', 'value']
+#for gene lists
+must_have_columns_tertiary_genelists = ['stable_id', 'gene'] 
+
 allowed_cells = {
     'T',
     'macrophage',
@@ -65,8 +68,8 @@ def check_dataframe(name, df):
     if not basename.startswith('_') and not name.startswith('_'):
         if name.startswith('secondary'):
             mh = set(must_have_columns_secondary)
-        elif name.startswith('tertiary'):
-            mh = set()
+        elif name.startswith('tertiary/genelists'):
+            mh = set(must_have_columns_tertiary_genelists)
         else:
             mh = set(must_have_columns)
             for c in 'cell', 'disease_state', 'tissue':
