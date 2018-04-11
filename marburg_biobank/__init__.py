@@ -151,7 +151,7 @@ class OvcaBiobank(object):
          takes a df, returns a modified df
 
         """
-        if dataset.starts_with('tertiary/genelists'):
+        if dataset.startswith('tertiary/genelists'):
             raise ValueError("No wide variant for gene lists available. Use get_dataset()")
         df = self.get_dataset(dataset)
         if filter_func:

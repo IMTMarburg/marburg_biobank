@@ -182,6 +182,7 @@ def extract_patient_compartment_meta(dict_of_dfs):
     columns = ['patient'] + known_compartment_columns
     for name in dict_of_dfs:
         if (not name.startswith('secondary/') and 
+            not name.startswith('tertiary/') and 
             not name.startswith('_') and not 
             os.path.basename(name).startswith('_')):
             df = dict_of_dfs[name]
@@ -230,7 +231,7 @@ def create_biobank(
     from . import OvcaBiobank
     bb = OvcaBiobank(filename)
     for ds in bb.list_datasets():
-        if ds.startswith('secondary/'):
+        if ds.startswith('secondary/') or ds.startswith('tertiary'):
             continue
         print ds
         df = bb.get_wide(ds, filter_func=lambda df: df[~df.unit.isin(['timestamp','string', 'bool'])])
