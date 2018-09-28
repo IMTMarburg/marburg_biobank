@@ -233,12 +233,12 @@ def create_biobank(
     for ds in bb.list_datasets():
         if ds.startswith('secondary/') or ds.startswith('tertiary'):
             continue
-        print ds
+        print(ds)
         df = bb.get_wide(ds, filter_func=lambda df: df[~df.unit.isin(['timestamp','string', 'bool'])])
         #df = bb.get_wide(ds)    
         for idx, row in df.iterrows():
-	    if row.dtype != float:
-	        print("Error in %s %s, dtype was %s" % (ds, idx, row.dtype))    
+            if row.dtype != float:
+                print("Error in %s %s, dtype was %s" % (ds, idx, row.dtype))    
 
 
 
@@ -264,5 +264,5 @@ def write_dfs(dict_of_dfs):
             os.makedirs(target_path)
         fn = os.path.join(target_path, os.path.basename(name))
         df.to_pickle(fn)
-	with open(fn, 'a') as op:
+        with open(fn, 'a') as op:
             pickle.dump(comment, op, pickle.HIGHEST_PROTOCOL)
