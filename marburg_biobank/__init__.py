@@ -342,3 +342,22 @@ class OvcaBiobank(object):
             return comments[match].iloc[0]['comment']
         else:
             return ''
+
+
+def download_and_open(username, password, revision):
+    from pathlib import Path
+    import requests
+    import shutil
+    fn = "marburg_ovca_biobank_%i.zip" % revision
+    if not Path(fn).exists():
+        print('downloading biobank revision %i', revision)
+        url = "https://mbf.imt.uni-marburg.de/biobank/download/marburg_biobank?revision=%i" % revision
+        r = requests.get(url, stream=True, auth=requests.auth.HTTPBasicAuth(username, password))
+        r.raw.decode_content = True
+        fh = open(fn, 'wb')
+        shutil.copyfileobj(r.raw, fh)
+        fh.close()
+    return OvcaBiobank(fn)
+
+
+
