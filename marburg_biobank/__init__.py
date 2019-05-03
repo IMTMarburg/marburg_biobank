@@ -353,6 +353,8 @@ def download_and_open(username, password, revision):
         print('downloading biobank revision %i', revision)
         url = "https://mbf.imt.uni-marburg.de/biobank/download/marburg_biobank?revision=%i" % revision
         r = requests.get(url, stream=True, auth=requests.auth.HTTPBasicAuth(username, password))
+        if r.status_code != 200:
+            raise ValueError("Non 200 OK Return - was %s" % r.status_code)
         r.raw.decode_content = True
         fh = open(fn, 'wb')
         shutil.copyfileobj(r.raw, fh)
