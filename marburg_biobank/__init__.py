@@ -165,9 +165,12 @@ class OvcaBiobank(object):
         self, dataset, apply_exclusion=True, standardized=False, filter_func=None
     ):
         """Return dataset in row=variable, column=patient format.
-        if @standardized is True Index is always (variable, unit) or (variable, unit, name), and columns always (patient, [compartment, cell_type, disease])
-        Otherwise, unit and compartment will be left of if there is only a single value for them in the dataset
-         if @apply_exclusion is True, excluded patients will be filtered from DataFrame
+        if @standardized is True Index is always (variable, unit) or (variable, unit, name), 
+        and columns always (patient, [compartment, cell_type, disease])
+
+        Otherwise, unit and compartment will be left off if there is only a 
+        single value for them in the dataset
+        if @apply_exclusion is True, excluded patients will be filtered from DataFrame
 
          @filter_func is run on the dataset before converting to wide, it
          takes a df, returns a modified df
@@ -208,7 +211,13 @@ class OvcaBiobank(object):
                     ):
                         pass
                     else:
-                        df = df.assign(**{x: np.nan})
+                        if standardized and x not in df.columns:
+                            df = df.assign(**{x: np.nan})
+                        elif not standardized:
+                            if ((hasattr(df[x], "cat") and (len(df[x].cat.categories) == 1))
+                            or (len(df[x].unique()) == 1)):
+                                if x in columns:
+                                    columns.remove(x)
 
         if standardized or len(df.unit.cat.categories) > 1:
             index.append("unit")
