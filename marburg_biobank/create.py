@@ -1,154 +1,163 @@
 import pandas as pd
+import inspect
+import pypipegraph as ppg
+from pathlib import Path
 import time
 import re
 import pickle
 import zipfile
 import os
-import collections
+import json
+
 
 
 
 # for the primary data
-must_have_columns = ['variable', 'unit', 'value', 'patient', ]
+must_have_columns = ["variable", "unit", "value", "patient"]
 # for 'secondary' datasets
-must_have_columns_secondary = ['variable', 'unit', 'value']
-#for gene lists
-must_have_columns_tertiary_genelists = ['stable_id', 'gene'] 
+must_have_columns_secondary = ["variable", "unit", "value"]
+# for gene lists
+must_have_columns_tertiary_genelists = ["stable_id", "gene"]
 
 allowed_cells = {
-    'T',
-    'macrophage',
-    'tumor',
-    'tumor_s',
-    'tumor_sc',
-    'tumor_m',
-    'tumor_L',
-    'tumor_G',
-    'MDSC',
-    'n.a.'
+    "T",
+    "macrophage",
+    "tumor",
+    "tumor_s",
+    "tumor_sc",
+    "tumor_m",
+    "tumor_L",
+    "tumor_G",
+    "MDSC",
+    'NK',
+    "n.a.",
 }
-allowed_tissues = {'blood',
-                   'ascites',
-                   'n.a.'
-                   }
-allowed_disease_states = {
-    'cancer',
-    'healthy',
-    'benign',
-    'n.a.',
-
-
-}
+allowed_tissues = {"blood", "ascites", "n.a."}
+allowed_disease_states = {"cancer", "healthy", "benign", "n.a."}
 
 
 def check_patient_id(patient_id):
     if patient_id.startswith("OVCA"):
-        if not re.match("^OVCA\d+$", patient_id):
-            raise ValueError(
-                "Patient id must be OVCA\\d if it starts with OVCA")
-        return 'cancer'
+        if not re.match(r"^OVCA\d+$", patient_id):
+            raise ValueError("Patient id must be OVCA\\d if it starts with OVCA")
+        return "cancer"
     else:
-        return 'non-cancer'
+        return "non-cancer"
 
 
 def check_dataframe(name, df):
-    if 'variable' in df.columns:
+    if "variable" in df.columns:
         df = df.assign(
-            variable=[x.encode('utf-8') if isinstance(x, str) else x for x in df.variable])
-    for c in 'seperate_me':
+            variable=[
+                x.encode("utf-8") if isinstance(x, str) else x for x in df.variable
+            ]
+        )
+    for c in "seperate_me":
         if c in df.columns:
-            raise ValueError(
-                "%s must no longer be a df column - %s " % (c, name))
-    if 'compartment' in df.columns and not 'disease' in df.columns:
+            raise ValueError("%s must no longer be a df column - %s " % (c, name))
+    if "compartment" in df.columns and not "disease" in df.columns:
         raise ValueError("Columns must now be cell_type/disease/compartment split")
-    if 'patient' in df.columns and df['patient'].str.startswith('OC').any():
-        raise ValueError("No patient may start with OC. - check if they've been 'OVCA'-ified") #
+    if "patient" in df.columns and df["patient"].str.startswith("OC").any():
+        raise ValueError(
+            "No patient may start with OC. - check if they've been 'OVCA'-ified"
+        )  #
     basename = os.path.basename(name)
     # no fixed requirements on _meta dfs
-    if not basename.startswith('_') and not name.startswith('_'):
-        if name.startswith('secondary'):
+    if not basename.startswith("_") and not name.startswith("_"):
+        if name.startswith("secondary"):
             mh = set(must_have_columns_secondary)
-        elif name.startswith('tertiary/genelists'):
+        elif name.startswith("tertiary/genelists"):
             mh = set(must_have_columns_tertiary_genelists)
         else:
             mh = set(must_have_columns)
-            for c in 'cell', 'disease_state', 'tissue':
+            for c in "cell", "disease_state", "tissue":
                 if c in df.columns:
                     raise ValueError(
-                        "%s must no longer be a df column - %s " % (c, name))
+                        "%s must no longer be a df column - %s " % (c, name)
+                    )
 
         missing = mh.difference(df.columns)
         if missing:
-            raise ValueError("%s is missing columns: %s, had %s" %
-                             (name, missing, df.columns))
-    elif name.endswith('_exclusion'):
-        mhc = ['patient', 'reason']
+            raise ValueError(
+                "%s is missing columns: %s, had %s" % (name, missing, df.columns)
+            )
+    elif name.endswith("_exclusion"):
+        mhc = ["patient", "reason"]
         missing = set(mhc).difference(df.columns)
         if missing:
-            raise ValueError("%s is missing columns: %s, had %s" %
-                             (name, missing, df.columns))
+            raise ValueError(
+                "%s is missing columns: %s, had %s" % (name, missing, df.columns)
+            )
 
     for column, allowed_values in [
-        ('cell_type', allowed_cells),
-        ('compartment', allowed_tissues),
-        ('disease', allowed_disease_states),
+        ("cell_type", allowed_cells),
+        ("compartment", allowed_tissues),
+        ("disease", allowed_disease_states),
     ]:
-        if column in df.columns and not name.startswith('secondary/'):
+        if column in df.columns and not name.startswith("secondary/"):
             x = set(df[column].unique()).difference(allowed_values)
             if x:
-                raise ValueError("invalid %s found in %s: %s" % (column, name, x,))
+                raise ValueError("invalid %s found in %s: %s" % (column, name, x))
 
-    if 'patient' in df.columns and not name.endswith('_exclusion'):
-        states = set([check_patient_id(x) for x in df['patient']])
+    if "patient" in df.columns and not name.endswith("_exclusion"):
+        states = set([check_patient_id(x) for x in df["patient"]])
         if len(states) > 1:
-            if 'disease' not in df.columns:
+            if "disease" not in df.columns:
                 raise ValueError(
-                    "Datasets mixing cancer and non cancer data need a disease column:%s"  % (name,))
+                    "Datasets mixing cancer and non cancer data need a disease column:%s"
+                    % (name,)
+                )
 
-    for x in 'variable', 'unit':
+    for x in "variable", "unit":
         if x in df.columns:
             if pd.isnull(df[x]).any():
                 raise ValueError("%s must not be nan in %s" % (x, name))
-            if df[x].str.startswith(' ').any():
+            if df[x].str.startswith(" ").any():
                 raise ValueError("At least one %s started with a space" % x)
-            if df[x].str.endswith(' ').any():
+            if df[x].str.endswith(" ").any():
                 raise ValueError("At least one %s ended with a space" % x)
 
-    if not basename.startswith('_') and not name.startswith('_') and not name.startswith('tertiary'):
-        for vu, group in df.groupby(['variable', 'unit']):
+    if (
+        not basename.startswith("_")
+        and not name.startswith("_")
+        and not name.startswith("tertiary")
+    ):
+        for vu, group in df.groupby(["variable", "unit"]):
             variable, unit = vu
-            if unit == 'string':
+            if unit == "string":
                 pass
-            elif unit == 'timestamp':
+            elif unit == "timestamp":
                 for v in group.value:
                     if not isinstance(v, pd.Timestamp):
-                        raise ValueError(
-                            "Not timestamp data in %s %s" % vu)
-            elif unit == 'bool':
+                        raise ValueError("Not timestamp data in %s %s" % vu)
+            elif unit == "bool":
                 if set(group.value.unique()) != set([True, False]):
                     raise ValueError(
-                        "Unexpected values for bool variables in %s %s" % vu)
+                        "Unexpected values for bool variables in %s %s" % vu
+                    )
             else:
-                if not ((group.value.dtype == int) & (group.value.dtype == float)): #might not be floaty enough
+                if not (
+                    (group.value.dtype == int) & (group.value.dtype == float)
+                ):  # might not be floaty enough
                     for v in group.value:
                         if not isinstance(v, float) and not isinstance(v, int):
                             raise ValueError("Non float in %s, %s" % vu)
 
 
-
 def fix_the_darn_string(x):
     if isinstance(x, bool):
         return x
-    if isinstance(x, str):
-        x = x.decode('utf-8')
+    if isinstance(x, bytes):
+        x = x.decode("utf-8")
     try:
-        return unicode(x)
-    except:
+        return str(x)
+    except:  # noqa:E722
         print(repr(x))
         print(type(x))
         print(x)
         import pickle
-        with open("debug.dat", 'w') as op:
+
+        with open("debug.dat", "w") as op:
             pickle.dump(x, op)
         raise
 
@@ -163,9 +172,9 @@ def categorical_where_appropriate(df):
     for c in df.columns:
         if df.dtypes[c] == object:
             try:
-                to_assign[c] = pd.to_numeric(df[c], errors='raise')
+                to_assign[c] = pd.to_numeric(df[c], errors="raise")
             except (ValueError, TypeError):
-                if len(df[c].unique()) <= len(df) * 0.3 or c == 'patient':
+                if len(df[c].unique()) <= len(df) * 0.3 or c == "patient":
                     to_assign[c] = pd.Categorical(df[c])
                     new_cats = [fix_the_darn_string(x) for x in to_assign[c].categories]
                     to_assign[c].categories = new_cats
@@ -176,81 +185,92 @@ def categorical_where_appropriate(df):
     df.index.names = [fix_the_darn_string(x) for x in df.index.names]
     return df
 
+
 def extract_patient_compartment_meta(dict_of_dfs):
     output = []
     from . import known_compartment_columns
-    columns = ['patient'] + known_compartment_columns
+
+    columns = ["patient"] + known_compartment_columns
     for name in dict_of_dfs:
-        if (not name.startswith('secondary/') and 
-            not name.startswith('tertiary/') and 
-            not name.startswith('_') and not 
-            os.path.basename(name).startswith('_')):
+        if (
+            not name.startswith("secondary/")
+            and not name.startswith("tertiary/")
+            and not name.startswith("_")
+            and not os.path.basename(name).startswith("_")
+        ):
             df = dict_of_dfs[name]
             subset = df[[x for x in columns if x in df.columns]]
             subset = subset[~subset.duplicated()]
             for idx, row in subset.iterrows():
-                row[u'dataset'] = unicode(name)
+                row[u"dataset"] = str(name)
                 output.append(row)
     return pd.DataFrame(output)
 
 
-def create_biobank(
-        dict_of_dataframes, name, revision, filename):
+def create_biobank(dict_of_dataframes, name, revision, filename, to_wide_columns):
     """Create a file suitable for biobank consumption.
     Assumes all dataframes have at least variable, unit, patient, compartment and value columns
     """
-    dict_of_dataframes['_meta/biobank'] = pd.DataFrame([
-        {'variable': 'biobank', 'value': name, },
-        {'variable': 'revision', 'value': revision, },
-    ])
+    dict_of_dataframes["_meta/biobank"] = pd.DataFrame(
+        [
+            {"variable": "biobank", "value": name},
+            {"variable": "revision", "value": revision},
+        ]
+    )
     for name, df in dict_of_dataframes.items():
         print("handling", name)
-        basename = os.path.basename(name)
+        # basename = os.path.basename(name)
         s = time.time()
         check_dataframe(name, df)
-        print('check time', time.time() - s)
+        print("check time", time.time() - s)
         s = time.time()
         df = categorical_where_appropriate(df)
-        print('cat time', time.time() - s)
+        print("cat time", time.time() - s)
         s = time.time()
         # enforce alphabetical column order after default columns
-        df = df[[x for x in must_have_columns if x in df.columns] +
-                sorted([x for x in df.columns if x not in must_have_columns])]
-        print('column order time', time.time() - s)
+        df = df[
+            [x for x in must_have_columns if x in df.columns]
+            + sorted([x for x in df.columns if x not in must_have_columns])
+        ]
+        print("column order time", time.time() - s)
         dict_of_dataframes[name] = df
     s = time.time()
-    dict_of_dataframes["_meta/patient_compartment_dataset"] = extract_patient_compartment_meta(dict_of_dataframes)
+    dict_of_dataframes[
+        "_meta/patient_compartment_dataset"
+    ] = extract_patient_compartment_meta(dict_of_dataframes)
     print("patient_compartment_dataset_time", time.time() - s)
     print("now writing zip file")
-    zfs = zipfile.ZipFile(filename, 'w')
+    zfs = zipfile.ZipFile(filename, "w")
     for name, df in dict_of_dataframes.items():
         zfs.writestr(name, df.to_msgpack())
+    zfs.writestr("_meta/_to_wide_columns", json.dumps(to_wide_columns))
     zfs.close()
-    #one last check it's all numbers...
+    # one last check it's all numbers...
     print("checking float")
     from . import OvcaBiobank
+
     bb = OvcaBiobank(filename)
     for ds in bb.list_datasets():
-        if ds.startswith('secondary/') or ds.startswith('tertiary'):
+        if ds.startswith("secondary/") or ds.startswith("tertiary"):
             continue
-        print(ds)
-        df = bb.get_wide(ds, filter_func=lambda df: df[~df.unit.isin(['timestamp','string', 'bool'])])
-        #df = bb.get_wide(ds)    
+        df = bb.get_wide(
+            ds,
+            filter_func=lambda df: df[~df.unit.isin(["timestamp", "string", "bool"])],
+        )
+        # df = bb.get_wide(ds)
         for idx, row in df.iterrows():
             if row.dtype != float:
-                print("Error in %s %s, dtype was %s" % (ds, idx, row.dtype))    
+                print("Error in %s %s, dtype was %s" % (ds, idx, row.dtype))
 
 
-
-def split_seperate_me(out_df, in_order=['patient', 'compartment']):
+def split_seperate_me(out_df, in_order=["patient", "compartment"]):
     """Helper for creating biobank compatible dataframes.
     splits a column 'seperate_me' with OVCA12-compartment
     into seperate patient and compartment columns"""
-    split = [x.split("-") for x in out_df['seperate_me']]
-    return out_df.assign(**{
-        x: [y[ii] for y in split]
-        for (ii, x) in enumerate(in_order)
-    }).drop('seperate_me', axis=1)
+    split = [x.split("-") for x in out_df["seperate_me"]]
+    return out_df.assign(
+        **{x: [y[ii] for y in split] for (ii, x) in enumerate(in_order)}
+    ).drop("seperate_me", axis=1)
 
 
 def write_dfs(dict_of_dfs):
@@ -259,10 +279,155 @@ def write_dfs(dict_of_dfs):
         df, comment = df_and_comment
         check_dataframe(name, df)
         d = os.path.dirname(name)
-        target_path = os.path.join('../../processed', d)
+        target_path = os.path.join("../../processed", d)
         if not os.path.exists(target_path):
             os.makedirs(target_path)
         fn = os.path.join(target_path, os.path.basename(name))
         df.to_pickle(fn)
-        with open(fn, 'a') as op:
+        with open(fn, "a") as op:
             pickle.dump(comment, op, pickle.HIGHEST_PROTOCOL)
+
+
+exporting_classes = []
+
+
+def exporting_class(cls):
+    exporting_classes.append(cls)
+    return cls
+
+
+def exporting_method(output_name, description, input_files=[], deps=[]):
+    def inner(func):
+        frame = inspect.stack()[1]
+        filename = frame.filename
+        cwd = os.getcwd()
+        os.chdir(Path(filename).parent)
+        func._output_name = output_name
+        func._description = description
+        func._input_files = [Path(x).absolute() for x in input_files]
+        func._deps = deps
+        os.chdir(cwd)
+        func._abs_filename = str(Path(func.__code__.co_filename).absolute())
+        return func
+
+    return inner
+
+
+def run_exports(gen_additional_jobs=None, handle_ppg=True):
+
+    old = Path(os.getcwd()).absolute()
+    os.chdir("/project")
+    if handle_ppg:
+        ppg.new_pipegraph()
+    # os.chdir(old)
+    to_wide_columns = {}
+    jobs = []
+    for cls in exporting_classes:
+        instance = cls()
+        if hasattr(instance, "exports"):
+            instance.exports()
+        if hasattr(instance, "dataset_columns_for_wide"):
+            new = instance.dataset_columns_for_wide()
+            intersection = set(to_wide_columns.keys()).intersection(new.keys())
+            if intersection:
+                raise ValueError("duplicate dataset column definitions", intersection)
+            to_wide_columns.update(new)
+
+        out_prefix = getattr(instance, "out_prefix", "")
+        for method_name in dir(instance):
+            method = getattr(instance, method_name)
+            if hasattr(method, "_output_name"):
+                print(cls.__name__, method.__name__)
+                output_filename = (
+                    "/project/processed/"
+                    + out_prefix
+                    + method._output_name
+                    + ".msgpack"
+                )
+                cwd = str(Path(method._abs_filename).parent)
+
+                def write(output_filename=output_filename, method=method, cwd=cwd):
+                    os.chdir(cwd)
+                    df = method()
+                    os.chdir("/project")
+                    check_dataframe(out_prefix + method._output_name, df)
+                    Path(output_filename).parent.mkdir(exist_ok=True, parents=True)
+                    df.to_msgpack(output_filename)
+                    Path(output_filename + ".desc").write_text(method._description)
+
+                job = ppg.MultiFileGeneratingJob(
+                    [output_filename, output_filename + ".desc"], write
+                )
+                job.depends_on(
+                    ppg.FunctionInvariant(output_filename + "_inner_func", method)
+                )
+                if method._input_files:
+                    job.depends_on(ppg.MultiFileInvariant(method._input_files))
+                if method._deps:
+                    if hasattr(method._deps, "__call__"):
+                        deps = method._deps(method.__self__)
+                    else:
+                        deps = method._deps
+                    job.depends_on(deps)
+
+                print(output_filename)
+                print("")
+                os.chdir("/project")
+                jobs.append(job)
+
+    def dump_to_wide_columns(output_filename):
+        Path(output_filename).write_text(json.dumps(to_wide_columns))
+
+    jobs.append(
+        ppg.FileGeneratingJob(
+            "/project/processed/_to_wide_columns.json", dump_to_wide_columns
+        ).depends_on(
+            ppg.ParameterInvariant(
+                "/project/processed/_to_wide_columns.json", ppg.util.freeze(to_wide_columns)
+            )
+        )
+    )
+
+    old = Path(os.getcwd()).absolute()
+    if handle_ppg:
+        os.chdir("/project")
+        ppg.run_pipegraph()
+    os.chdir(old)
+    return jobs
+
+
+def PseudoNotebookRun(notebook_python_file, target_object):
+    notebook_python_file = str(notebook_python_file)
+    inv = ppg.FileInvariant(notebook_python_file)
+
+    def run():
+        import marburg_biobank.create
+
+        source = Path(notebook_python_file).read_text()
+        collector = {}
+
+        def write_dfs(d):
+            res = {}
+            for k, v in d.items():
+                collector[k] = v[0]  # throw away description
+            return res
+
+        def get_dummy_ipython():
+            class DummyIpython:
+                def run_line_magic(self, *args, **kwargs):
+                    pass
+
+            return DummyIpython()
+
+        marburg_biobank.create.write_dfs = write_dfs
+        g = globals().copy()
+        g["get_ipython"] = get_dummy_ipython
+        ppg.util.global_pipegraph = None
+        exec(source, g)
+        os.chdir("/project")
+        return collector
+
+    return ppg.CachedAttributeLoadingJob(
+        notebook_python_file + ".result", target_object, "data", run
+    ).depends_on(inv)
+
