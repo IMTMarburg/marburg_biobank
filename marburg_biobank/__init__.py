@@ -111,8 +111,9 @@ class OvcaBiobank(object):
             x = df[["variable", "unit"]].drop_duplicates(["variable", "unit"])
             return set(zip(x["variable"], x["unit"]))
 
-    def get_possible_values(self, variable, unit):
-        pass
+    def get_possible_values(self, dataset, variable, unit):
+        df = self.get_dataset(dataset)
+        return df['value'][(df['variable'] == variable) & (df['unit'] == unit)].unique()
 
     @lazy_member("_cache_list_datasets")
     def list_datasets(self):
@@ -247,7 +248,10 @@ class OvcaBiobank(object):
         # this removes categories from the levels of the index. Absolutly
         # necessary, or you can't add columns later otherwise
         if isinstance(c, pd.MultiIndex):
-            c = pd.MultiIndex([list(x) for x in c.levels], codes=c.codes, names=c.names)
+            try:
+                c = pd.MultiIndex([list(x) for x in c.levels], codes=c.codes, names=c.names)
+            except AttributeError:
+                c = pd.MultiIndex([list(x) for x in c.levels], labels=c.labels, names=c.names)
         else:
             c = list(c)
         res.columns = c
