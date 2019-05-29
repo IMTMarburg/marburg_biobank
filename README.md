@@ -1,21 +1,23 @@
-#marburg_biobank
-##Introduction
+# marburg_biobank
+## Introduction
 
 The marburg_biobank python module offers a high level interface to the data sets
 stored in the [Ovarian Cancer Effusion Biobank and Database])(https://www.ovara.net/biobank).
 
 The basic usage is as follows:
 ```python
+
 import marburg_biobank
-db = marburg_biobank.OvcaBiobank("marburg_ovca_revision_5.zip") #  you need to download that file from your biobank.
+db = marburg_biobank.OvcaBiobank("marburg_ovca_revision_15.zip") #  you need to download that file from your biobank.
 print(db.list_datasets())
 df_wide = db.get_wide('transcriptomics/rnaseq')  # to retrieve the data in a one sample per column / one row per measured variable format
 df_tall = db.get_dataset('transcriptomics/rnaseq') # to retrieve the data in one row per data point format
 ```
 
 
-##Data formats available
-###wide
+## Data formats available
+
+### wide
 Using ```db.get_wide(dataset)```:
 
 A pandas DataFrame that looks like this
@@ -30,7 +32,8 @@ Caveats: If a dataset has only one compartment, the compartment information is o
 The same applies for the unit in the index.
 If there is a 'name' column in dataset, it get's added to the index, regardless of the value of standardized.
 
-###tall
+### tall
+
 Using: ```db.get_dataset(dataset)```):
 
 A pandas DataFrame that looks like this
@@ -45,19 +48,24 @@ A pandas DataFrame that looks like this
 This is the internal storage format.
 
 
-##compartments
+## compartments
  Compartments are an abstraction on top of 'cells' and 'bio-liquid'. Examples are Tumor associated macrophages (TAMs), Tumor cells (TU), ascites, blood...
  ```db.get_compartments()``` provides a list
 
-##Datasets
+## Datasets
 
-Datasets are organized two levels deep. The first one defines the
-*omics being measured (transcriptomics, proteomics, ... or 'clinical'), while
-the second levels defines the actual method (RNaseq, FACS,...)
+Datasets are organized three levels deep. The first one defines the whether
+you're looking t ex-vivo (=primary) data or in-vitro experiments (=secondary) 
+or literature data (=tertiary).
+The second level defines *omics being measured (transcriptomics, proteomics, ... or 'clinical'), while
+the third levels defines the actual method (RNaseq, FACS,...)
 
-Survival data is in clinical/survival. Please remember: if using [https://pypi.python.org/pypi/lifelines](lifelines), censored and event are negations of each other.
+Survival data is in primary/clinical/survival. 
 
-##Excluded patients:
+Please remember: if using [https://pypi.python.org/pypi/lifelines](lifelines), censored and event are negations of each other.
+
+## Excluded patients:
+
 Exclusion can either be on a patient, or a patient+compartment level.
 In addition, there is per dataset exclusion and global exclusion.
 
