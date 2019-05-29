@@ -428,7 +428,7 @@ def download_and_open(username, password, revision):
 
     fn = "marburg_ovca_biobank_%i.zip" % revision
     if not Path(fn).exists():
-        print("downloading biobank revision %i", revision)
+        print("downloading biobank revision %i" % revision)
         url = (
             "https://mbf.imt.uni-marburg.de/biobank/download/marburg_biobank?revision=%i"
             % revision
