@@ -3,6 +3,8 @@ import os
 import numpy as np
 import pandas as pd
 
+from .__version__ import __version__
+
 try:
     from functools import lru_cache
 except (ImportError, AttributeError):
