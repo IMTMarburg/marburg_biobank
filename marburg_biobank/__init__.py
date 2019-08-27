@@ -427,18 +427,34 @@ class OvcaBiobank(object):
         else:
             return ""
 
+def _find_newest_revision(username, password, revision):
+    import requests
+    url = "https://mbf.imt.uni-marburg.de/biobank/download/find_newest_revision"
+    if revision:
+        url += "?revision=%s" % revision
+    r = requests.get(
+        url, stream=True, auth=requests.auth.HTTPBasicAuth(username, password)
+    )
+    if r.status_code != 200:
+        raise ValueError("Non 200 OK Return - was %s" % r.status_code)
+    return r.text
 
-def download_and_open(username, password, revision):
+def download_and_open(username, password, revision=None):
     from pathlib import Path
     import requests
     import shutil
 
-    fn = "marburg_ovca_biobank_%i.zip" % revision
+    newest = _find_newest_revision(username, password, revision)
+    if revision is None:
+        print('newest revision is', newest)
+    else:
+        print("newest revision for %s is %s" % (revision, newest))
+    fn = "marburg_ovca_biobank_%s.zip" % newest
     if not Path(fn).exists():
-        print("downloading biobank revision %i" % revision)
+        print("downloading biobank revision %s" % newest)
         url = (
-            "https://mbf.imt.uni-marburg.de/biobank/download/marburg_biobank?revision=%i"
-            % revision
+            "https://mbf.imt.uni-marburg.de/biobank/download/marburg_biobank?revision=%s"
+            % newest
         )
         r = requests.get(
             url, stream=True, auth=requests.auth.HTTPBasicAuth(username, password)
@@ -449,5 +465,7 @@ def download_and_open(username, password, revision):
         fh = open(fn, "wb")
         shutil.copyfileobj(r.raw, fh)
         fh.close()
+    else:
+        print("using local copy %s" % fn)
     return OvcaBiobank(fn)
 
