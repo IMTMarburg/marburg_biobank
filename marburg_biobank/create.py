@@ -31,8 +31,9 @@ allowed_cells = {
     "MDSC",
     'NK',
     "n.a.",
+    'adipocyte',
 }
-allowed_tissues = {"blood", "ascites", "n.a."}
+allowed_tissues = {"blood", "ascites", "n.a.", 'omentum'}
 allowed_disease_states = {"cancer", "healthy", "benign", "n.a."}
 
 
@@ -97,7 +98,7 @@ def check_dataframe(name, df):
         if column in df.columns and not name.startswith("secondary/"):
             x = set(df[column].unique()).difference(allowed_values)
             if x:
-                raise ValueError("invalid %s found in %s: %s" % (column, name, x))
+                raise ValueError("invalid %s found in %s: %s - check marburg_biobank/create.py, allowed_* if you want to extend it" % (column, name, x))
 
     if "patient" in df.columns and not name.endswith("_exclusion"):
         states = set([check_patient_id(x) for x in df["patient"]])

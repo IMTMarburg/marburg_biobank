@@ -188,40 +188,7 @@ class OvcaBiobank(object):
             df = filter_func(df)
 
         index = ["variable"]
-        try:
-            columns_to_use = self._get_dataset_columns_meta()
-        except KeyError:
-            columns_to_use = {}
-        if dataset in columns_to_use:
-            columns = columns_to_use[dataset]
-        else:
-            if "vid" in df.columns and not "patient" in df.columns:
-                columns = ["vid"]
-            elif "patient" in df.columns:
-                columns = ["patient"]
-            else:
-                raise ValueError(
-                    "Do not know how to convert this dataset (neither patient nor vid column)."
-                    " Retrieve it get_dataset() and call to_wide() manually with appropriate parameters."
-                )
-            for x in known_compartment_columns:
-                if x in df.columns or (standardized and x != "compartment"):
-                    if not x in columns:
-                        columns.append(x)
-                    if x in df.columns and (
-                        (hasattr(df[x], "cat") and (len(df[x].cat.categories) > 1))
-                        or (len(df[x].unique()) > 1)
-                    ):
-                        pass
-                    else:
-                        if standardized and x not in df.columns:
-                            df = df.assign(**{x: np.nan})
-                        elif not standardized:
-                            if ((hasattr(df[x], "cat") and (len(df[x].cat.categories) == 1))
-                            or (len(df[x].unique()) == 1)):
-                                if x in columns:
-                                    columns.remove(x)
-
+        columns = self._get_wide_columns(dataset, df, standardized)
         if standardized or len(df.unit.cat.categories) > 1:
             index.append("unit")
         if "name" in df.columns:
@@ -231,6 +198,44 @@ class OvcaBiobank(object):
             return self.apply_exclusion(dataset, dfw)
         else:
             return dfw
+
+    def _get_wide_columns(self, dataset, tall_df, standardized):
+        try:
+            columns_to_use = self._get_dataset_columns_meta()
+        except KeyError:
+            columns_to_use = {}
+        if dataset in columns_to_use:
+            columns = columns_to_use[dataset]
+        else:
+            if "vid" in tall_df.columns and not "patient" in tall_df.columns:
+                columns = ["vid"]
+            elif "patient" in tall_df.columns:
+                columns = ["patient"]
+            else:
+                raise ValueError(
+                    "Do not know how to convert this dataset (neither patient nor vid column)."
+                    " Retrieve it get_dataset() and call to_wide() manually with appropriate parameters."
+                )
+            for x in known_compartment_columns:
+                if x in tall_df.columns or (standardized and x != "compartment"):
+                    if not x in columns:
+                        columns.append(x)
+                    if x in tall_df.columns and (
+                        (hasattr(tall_df[x], "cat") and (len(tall_df[x].cat.categories) > 1))
+                        or (len(tall_df[x].unique()) > 1)
+                    ):
+                        pass
+                    else:
+                        if standardized and x not in tall_df.columns:
+                            tall_df = tall_df.assign(**{x: np.nan})
+                        elif not standardized:
+                            if ((hasattr(tall_df[x], "cat") and (len(tall_df[x].cat.categories) == 1))
+                            or (len(df[x].unique()) == 1)):
+                                if x in columns:
+                                    columns.remove(x)
+        return columns
+
+
 
     def to_wide(
         self,
