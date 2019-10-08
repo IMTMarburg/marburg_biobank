@@ -47,12 +47,13 @@ def check_patient_id(patient_id):
 
 
 def check_dataframe(name, df):
-    if "variable" in df.columns:
-        df = df.assign(
-            variable=[
-                x.encode("utf-8") if isinstance(x, str) else x for x in df.variable
-            ]
-        )
+    #why was this done?
+    # if "variable" in df.columns:
+        # df = df.assign(
+            # variable=[
+                # x.encode("utf-8") if isinstance(x, str) else x for x in df.variable
+            # ]
+        # )
     for c in "seperate_me":
         if c in df.columns:
             raise ValueError("%s must no longer be a df column - %s " % (c, name))
@@ -111,12 +112,16 @@ def check_dataframe(name, df):
 
     for x in "variable", "unit":
         if x in df.columns:
-            if pd.isnull(df[x]).any():
-                raise ValueError("%s must not be nan in %s" % (x, name))
-            if df[x].str.startswith(" ").any():
-                raise ValueError("At least one %s started with a space" % x)
-            if df[x].str.endswith(" ").any():
-                raise ValueError("At least one %s ended with a space" % x)
+            try:
+                if pd.isnull(df[x]).any():
+                    raise ValueError("%s must not be nan in %s" % (x, name))
+                if df[x].str.startswith(" ").any():
+                    raise ValueError("At least one %s started with a space" % x)
+                if df[x].str.endswith(" ").any():
+                    raise ValueError("At least one %s ended with a space" % x)
+            except:
+                print('column', x)
+                raise 
 
     if (
         not basename.startswith("_")
@@ -277,7 +282,10 @@ def split_seperate_me(out_df, in_order=["patient", "compartment"]):
 def write_dfs(dict_of_dfs):
     """Helper used by the notebooks to dump the dataframes for import"""
     for name, df_and_comment in dict_of_dfs.items():
-        df, comment = df_and_comment
+        if isinstance(df_and_comment, tuple):
+            df, _comment = df_and_comment
+        else:
+            df = df_and_comment
         check_dataframe(name, df)
         d = os.path.dirname(name)
         target_path = os.path.join("../../processed", d)
@@ -285,8 +293,8 @@ def write_dfs(dict_of_dfs):
             os.makedirs(target_path)
         fn = os.path.join(target_path, os.path.basename(name))
         df.to_pickle(fn)
-        with open(fn, "a") as op:
-            pickle.dump(comment, op, pickle.HIGHEST_PROTOCOL)
+        #with open(fn, "a") as op:
+            #pickle.dump(comment, op, pickle.HIGHEST_PROTOCOL)
 
 
 exporting_classes = []
@@ -397,7 +405,7 @@ def run_exports(gen_additional_jobs=None, handle_ppg=True):
     return jobs
 
 
-def PseudoNotebookRun(notebook_python_file, target_object):
+def PseudoNotebookRun(notebook_python_file, target_object,chdir=False):
     notebook_python_file = str(notebook_python_file)
     inv = ppg.FileInvariant(notebook_python_file)
 
@@ -410,7 +418,10 @@ def PseudoNotebookRun(notebook_python_file, target_object):
         def write_dfs(d):
             res = {}
             for k, v in d.items():
-                collector[k] = v[0]  # throw away description
+                if isinstance(v, tuple):
+                    collector[k] = v[0]  # throw away description
+                else:
+                    collector[k] = v
             return res
 
         def get_dummy_ipython():
@@ -424,6 +435,8 @@ def PseudoNotebookRun(notebook_python_file, target_object):
         g = globals().copy()
         g["get_ipython"] = get_dummy_ipython
         ppg.util.global_pipegraph = None
+        if chdir:
+            os.chdir(Path(notebook_python_file).parent)
         exec(source, g)
         os.chdir("/project")
         return collector
