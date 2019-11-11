@@ -191,7 +191,7 @@ class OvcaBiobank(object):
         import json
 
         with self.zf.open("_meta/_to_wide_columns") as op:
-            return json.load(op)
+            return json.loads(op.read().decode('utf-8'))
 
     @lru_cache(maxsize=datasets_to_cache)
     def get_wide(
@@ -223,6 +223,8 @@ class OvcaBiobank(object):
             index.append("unit")
         if "name" in df.columns:
             index.append("name")
+        #if 'somascan' in dataset:
+            #raise ValueError(dataset, df.columns, index ,columns)
         dfw = self.to_wide(df, index, columns)
         if apply_exclusion:
             return self.apply_exclusion(dataset, dfw)
@@ -288,7 +290,8 @@ class OvcaBiobank(object):
         """
         if columns == known_compartment_columns:
             columns = [x for x in columns if x in df.columns]
-        df = df[["value"] + index + columns]
+        #raise ValueError(df.columns,index,columns)
+        df = df.loc[:,["value"] + index + columns]
         set_index_on = index + columns
         columns_pos = tuple(range(len(index), len(index) + len(columns)))
         res = df.set_index(set_index_on).unstack(columns_pos)
