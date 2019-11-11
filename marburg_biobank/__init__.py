@@ -58,6 +58,16 @@ class OvcaBiobank(object):
     def __init__(self, filename):
         self.filename = filename
         self.zf = zipfile.ZipFile(filename)
+        if not "_meta/_data_format" in self.zf.namelist():
+            self.data_format = "msg_pack"
+        else:
+            with self.zf.open("_meta/_data_format") as op:
+                self.data_format = op.read().decode("utf-8")
+        if self.data_format not in ("msg_pack", "parquet"):
+            raise ValueError(
+                "Unexpected data format (%s). Do you need to update marburg_biobank"
+                % (self.data_format)
+            )
         self._cached_datasets = {}
 
     def get_all_patients(self):
@@ -115,24 +125,44 @@ class OvcaBiobank(object):
 
     def get_possible_values(self, dataset, variable, unit):
         df = self.get_dataset(dataset)
-        return df['value'][(df['variable'] == variable) & (df['unit'] == unit)].unique()
+        return df["value"][(df["variable"] == variable) & (df["unit"] == unit)].unique()
 
     @lazy_member("_cache_list_datasets")
     def list_datasets(self):
         """What datasets to we have"""
-        return sorted(
-            [
-                name
-                for name in self.zf.namelist()
-                if not name.startswith("_")
-                and not os.path.basename(name).startswith("_")
-            ]
-        )
+        if self.data_format == "msg_pack":
+            return sorted(
+                [
+                    name
+                    for name in self.zf.namelist()
+                    if not name.startswith("_")
+                    and not os.path.basename(name).startswith("_")
+                ]
+            )
+        elif self.data_format == "parquet":
+            return sorted(
+                [
+                    name[: name.rfind("/")]
+                    for name in self.zf.namelist()
+                    if not name.startswith("_")
+                    and not os.path.basename(name[: name.rfind("/")]).startswith("_")
+                    and name.endswith("/0")
+                ]
+            )
 
     @lazy_member("_cache_list_datasets_incl_meta")
     def list_datasets_including_meta(self):
         """What datasets to we have"""
-        return sorted(self.zf.namelist())
+        if self.data_format == "msg_pack":
+            return sorted(self.zf.namelist())
+        elif self.data_format == "parquet":
+            import re
+            raw = self.zf.namelist()
+            without_numbers = [
+                x if not re.search("/[0-9]+$", x) else x[:x.rfind('/')]
+                for x in raw
+            ]
+            return sorted(set(without_numbers))
 
     @lazy_member("_datasets_with_name_lookup")
     def datasets_with_name_lookup(self):
@@ -221,7 +251,10 @@ class OvcaBiobank(object):
                     if not x in columns:
                         columns.append(x)
                     if x in tall_df.columns and (
-                        (hasattr(tall_df[x], "cat") and (len(tall_df[x].cat.categories) > 1))
+                        (
+                            hasattr(tall_df[x], "cat")
+                            and (len(tall_df[x].cat.categories) > 1)
+                        )
                         or (len(tall_df[x].unique()) > 1)
                     ):
                         pass
@@ -229,13 +262,13 @@ class OvcaBiobank(object):
                         if standardized and x not in tall_df.columns:
                             tall_df = tall_df.assign(**{x: np.nan})
                         elif not standardized:
-                            if ((hasattr(tall_df[x], "cat") and (len(tall_df[x].cat.categories) == 1))
-                            or (len(df[x].unique()) == 1)):
+                            if (
+                                hasattr(tall_df[x], "cat")
+                                and (len(tall_df[x].cat.categories) == 1)
+                            ) or (len(tall_df[x].unique()) == 1):
                                 if x in columns:
                                     columns.remove(x)
         return columns
-
-
 
     def to_wide(
         self,
@@ -265,9 +298,13 @@ class OvcaBiobank(object):
         # necessary, or you can't add columns later otherwise
         if isinstance(c, pd.MultiIndex):
             try:
-                c = pd.MultiIndex([list(x) for x in c.levels], codes=c.codes, names=c.names)
+                c = pd.MultiIndex(
+                    [list(x) for x in c.levels], codes=c.codes, names=c.names
+                )
             except AttributeError:
-                c = pd.MultiIndex([list(x) for x in c.levels], labels=c.labels, names=c.names)
+                c = pd.MultiIndex(
+                    [list(x) for x in c.levels], labels=c.labels, names=c.names
+                )
         else:
             c = list(c)
         res.columns = c
@@ -282,7 +319,7 @@ class OvcaBiobank(object):
                 raise ValueError("here")
             try:
                 res[c] = pd.to_numeric(x, errors="raise")
-            except ValueError:  # leaving the Nones as Nones
+            except (ValueError, TypeError):  # leaving the Nones as Nones
                 pass
         return res
 
@@ -405,17 +442,47 @@ class OvcaBiobank(object):
     def get_dataset(self, name, apply_exclusion=False):
         """Retrieve a dataset"""
         name = self.dataset_exists(name)
-        with self.zf.open(name) as op:
-            try:
-                df = pd.read_msgpack(op.read())
-                if apply_exclusion:
-                    df = self.apply_exclusion(name, df)
-                return df
-            except KeyError as e:
-                if "KeyError: u'category'" in str(e):
-                    raise ValueError(
-                        "Your pandas is too old. You need at least version 0.18"
-                    )
+        if self.data_format == "msg_pack":
+            with self.zf.open(name) as op:
+                try:
+                    df = pd.read_msgpack(op.read())
+                except KeyError as e:
+                    if "KeyError: u'category'" in str(e):
+                        raise ValueError(
+                            "Your pandas is too old. You need at least version 0.18"
+                        )
+        elif self.data_format == "parquet":
+            ds = self.zf.namelist()
+            ii = 0
+            dfs = []
+            sub_name = name + "/" + str(ii)
+            while sub_name in ds:
+                with self.zf.open(sub_name) as op:
+                    dfs.append(pd.read_parquet(op))
+                ii += 1
+                sub_name = name + "/" + str(ii)
+            if not dfs: # not actually a unit splitted dataframe - meta? 
+                with self.zf.open(name) as op:
+                    df = pd.read_parquet(op)
+            elif len(dfs) == 1:
+                df = dfs[0]
+            else:
+                categoricals = set()
+                for df in dfs:
+                    for c, dt in df.dtypes.items():
+                        if dt.name == 'category':
+                            categoricals.add(c)
+                df = pd.concat(dfs)
+                reps = {c: pd.Categorical(df[c]) for c in categoricals}
+                if reps:
+                    df = df.assign(**reps)
+        else:
+            raise ValueError(
+                "Unexpected data format. Do you need to upgrade marburg_biobank?"
+            )
+        if apply_exclusion:
+                df = self.apply_exclusion(name, df)
+        return df
 
     def get_comment(self, name):
         comments = self.get_dataset("_meta/comments")
@@ -427,8 +494,10 @@ class OvcaBiobank(object):
         else:
             return ""
 
+
 def _find_newest_revision(username, password, revision):
     import requests
+
     url = "https://mbf.imt.uni-marburg.de/biobank/download/find_newest_revision"
     if revision:
         url += "?revision=%s" % revision
@@ -439,6 +508,7 @@ def _find_newest_revision(username, password, revision):
         raise ValueError("Non 200 OK Return - was %s" % r.status_code)
     return r.text
 
+
 def download_and_open(username, password, revision=None):
     from pathlib import Path
     import requests
@@ -446,7 +516,7 @@ def download_and_open(username, password, revision=None):
 
     newest = _find_newest_revision(username, password, revision)
     if revision is None:
-        print('newest revision is', newest)
+        print("newest revision is", newest)
     else:
         print("newest revision for %s is %s" % (revision, newest))
     fn = "marburg_ovca_biobank_%s.zip" % newest
@@ -468,4 +538,3 @@ def download_and_open(username, password, revision=None):
     else:
         print("using local copy %s" % fn)
     return OvcaBiobank(fn)
-

@@ -1,4 +1,5 @@
 import pandas as pd
+import tempfile
 import inspect
 import pypipegraph as ppg
 from pathlib import Path
@@ -8,9 +9,7 @@ import pickle
 import zipfile
 import os
 import json
-
-
-
+import base64
 
 # for the primary data
 must_have_columns = ["variable", "unit", "value", "patient"]
@@ -29,11 +28,11 @@ allowed_cells = {
     "tumor_L",
     "tumor_G",
     "MDSC",
-    'NK',
+    "NK",
     "n.a.",
-    'adipocyte',
+    "adipocyte",
 }
-allowed_tissues = {"blood", "ascites", "n.a.", 'omentum'}
+allowed_tissues = {"blood", "ascites", "n.a.", "omentum"}
 allowed_disease_states = {"cancer", "healthy", "benign", "n.a."}
 
 
@@ -47,13 +46,13 @@ def check_patient_id(patient_id):
 
 
 def check_dataframe(name, df):
-    #why was this done?
+    # why was this done?
     # if "variable" in df.columns:
-        # df = df.assign(
-            # variable=[
-                # x.encode("utf-8") if isinstance(x, str) else x for x in df.variable
-            # ]
-        # )
+    # df = df.assign(
+    # variable=[
+    # x.encode("utf-8") if isinstance(x, str) else x for x in df.variable
+    # ]
+    # )
     for c in "seperate_me":
         if c in df.columns:
             raise ValueError("%s must no longer be a df column - %s " % (c, name))
@@ -63,6 +62,10 @@ def check_dataframe(name, df):
         raise ValueError(
             "No patient may start with OC. - check if they've been 'OVCA'-ified"
         )  #
+    # dataframes ofter now are _actual_name/0-9+,
+    # but possibly only after writing it out...
+    if re.search("/[0-9]+$", name):
+        name = name[: name.rfind("/")]
     basename = os.path.basename(name)
     # no fixed requirements on _meta dfs
     if not basename.startswith("_") and not name.startswith("_"):
@@ -99,7 +102,10 @@ def check_dataframe(name, df):
         if column in df.columns and not name.startswith("secondary/"):
             x = set(df[column].unique()).difference(allowed_values)
             if x:
-                raise ValueError("invalid %s found in %s: %s - check marburg_biobank/create.py, allowed_* if you want to extend it" % (column, name, x))
+                raise ValueError(
+                    "invalid %s found in %s: %s - check marburg_biobank/create.py, allowed_* if you want to extend it"
+                    % (column, name, x)
+                )
 
     if "patient" in df.columns and not name.endswith("_exclusion"):
         states = set([check_patient_id(x) for x in df["patient"]])
@@ -120,8 +126,8 @@ def check_dataframe(name, df):
                 if df[x].str.endswith(" ").any():
                     raise ValueError("At least one %s ended with a space" % x)
             except:
-                print('column', x)
-                raise 
+                print("column", x)
+                raise
 
     if (
         not basename.startswith("_")
@@ -215,7 +221,7 @@ def extract_patient_compartment_meta(dict_of_dfs):
 
 def create_biobank(dict_of_dataframes, name, revision, filename, to_wide_columns):
     """Create a file suitable for biobank consumption.
-    Assumes all dataframes have at least variable, unit, patient, compartment and value columns
+    Assumes all dataframes pass check_dataframe
     """
     dict_of_dataframes["_meta/biobank"] = pd.DataFrame(
         [
@@ -248,21 +254,33 @@ def create_biobank(dict_of_dataframes, name, revision, filename, to_wide_columns
     print("now writing zip file")
     zfs = zipfile.ZipFile(filename, "w")
     for name, df in dict_of_dataframes.items():
-        zfs.writestr(name, df.to_msgpack())
+        tf = tempfile.NamedTemporaryFile(mode="w+b", suffix=".pq")
+        df.to_parquet(tf)
+        tf.flush()
+        tf.seek(0, 0)
+        zfs.writestr(name, tf.read())
     zfs.writestr("_meta/_to_wide_columns", json.dumps(to_wide_columns))
+    zfs.writestr("_meta/_data_format", "parquet")
     zfs.close()
     # one last check it's all numbers...
     print("checking float")
     from . import OvcaBiobank
 
+    # check that we can do the get_wide on all of them
     bb = OvcaBiobank(filename)
     for ds in bb.list_datasets():
-        if ds.startswith("secondary/") or ds.startswith("tertiary"):
+        if ds.startswith("tertiary"):
             continue
-        df = bb.get_wide(
-            ds,
-            filter_func=lambda df: df[~df.unit.isin(["timestamp", "string", "bool"])],
-        )
+        try:
+            df = bb.get_wide(
+                ds,
+                filter_func=lambda df: df[
+                    ~df.unit.isin(["timestamp", "string", "bool"])
+                ],
+            )
+        except:
+            print(ds)
+            raise
         # df = bb.get_wide(ds)
         for idx, row in df.iterrows():
             if row.dtype != float:
@@ -288,13 +306,13 @@ def write_dfs(dict_of_dfs):
             df = df_and_comment
         check_dataframe(name, df)
         d = os.path.dirname(name)
-        target_path = os.path.join("../../processed", d)
+        target_path = os.path.join("/project/processed", d)
         if not os.path.exists(target_path):
             os.makedirs(target_path)
         fn = os.path.join(target_path, os.path.basename(name))
         df.to_pickle(fn)
-        #with open(fn, "a") as op:
-            #pickle.dump(comment, op, pickle.HIGHEST_PROTOCOL)
+        # with open(fn, "a") as op:
+        # pickle.dump(comment, op, pickle.HIGHEST_PROTOCOL)
 
 
 exporting_classes = []
@@ -348,10 +366,7 @@ def run_exports(gen_additional_jobs=None, handle_ppg=True):
             if hasattr(method, "_output_name"):
                 print(cls.__name__, method.__name__)
                 output_filename = (
-                    "/project/processed/"
-                    + out_prefix
-                    + method._output_name
-                    + ".msgpack"
+                    "/project/processed/" + out_prefix + method._output_name + ".units"
                 )
                 cwd = str(Path(method._abs_filename).parent)
 
@@ -361,7 +376,29 @@ def run_exports(gen_additional_jobs=None, handle_ppg=True):
                     os.chdir("/project")
                     check_dataframe(out_prefix + method._output_name, df)
                     Path(output_filename).parent.mkdir(exist_ok=True, parents=True)
-                    df.to_msgpack(output_filename)
+                    if "unit" in df:
+                        for ii, (unit, sub_df) in enumerate(
+                            df.groupby("unit", sort=True)
+                        ):
+                            try:
+                                sub_df.to_parquet(
+                                    output_filename[: output_filename.rfind(".")]
+                                    + "."
+                                    + str(ii)
+                                    + ".parquet"
+                                )
+                            except:
+                                sub_df.to_pickle("debug.pickle")
+                                raise
+
+                        Path(output_filename).write_text(
+                            json.dumps(sorted(df.unit.unique()))
+                        )
+                    else:
+                        df.to_parquet(
+                            output_filename[: output_filename.rfind(".")] + ".0.parquet"
+                        )
+                        Path(output_filename).write_text(json.dumps(["nounit"]))
                     Path(output_filename + ".desc").write_text(method._description)
 
                 job = ppg.MultiFileGeneratingJob(
@@ -392,7 +429,8 @@ def run_exports(gen_additional_jobs=None, handle_ppg=True):
             "/project/processed/_to_wide_columns.json", dump_to_wide_columns
         ).depends_on(
             ppg.ParameterInvariant(
-                "/project/processed/_to_wide_columns.json", ppg.util.freeze(to_wide_columns)
+                "/project/processed/_to_wide_columns.json",
+                ppg.util.freeze(to_wide_columns),
             )
         )
     )
@@ -405,7 +443,7 @@ def run_exports(gen_additional_jobs=None, handle_ppg=True):
     return jobs
 
 
-def PseudoNotebookRun(notebook_python_file, target_object,chdir=False):
+def PseudoNotebookRun(notebook_python_file, target_object, chdir=False):
     notebook_python_file = str(notebook_python_file)
     inv = ppg.FileInvariant(notebook_python_file)
 
@@ -444,4 +482,3 @@ def PseudoNotebookRun(notebook_python_file, target_object,chdir=False):
     return ppg.CachedAttributeLoadingJob(
         notebook_python_file + ".result", target_object, "data", run
     ).depends_on(inv)
-
