@@ -322,6 +322,14 @@ def exporting_class(cls):
     exporting_classes.append(cls)
     return cls
 
+def prep_desc(x):
+    x = x.strip()
+    import re
+    x = re.sub("\n[ ]+", "\n", x)
+    return x
+
+
+
 
 def exporting_method(output_name, description, input_files=[], deps=[]):
     def inner(func):
@@ -330,7 +338,7 @@ def exporting_method(output_name, description, input_files=[], deps=[]):
         cwd = os.getcwd()
         os.chdir(Path(filename).parent)
         func._output_name = output_name
-        func._description = description
+        func._description = prep_desc(description)
         func._input_files = [Path(x).absolute() for x in input_files]
         func._deps = deps
         os.chdir(cwd)

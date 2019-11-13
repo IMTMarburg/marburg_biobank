@@ -157,10 +157,10 @@ class OvcaBiobank(object):
             return sorted(self.zf.namelist())
         elif self.data_format == "parquet":
             import re
+
             raw = self.zf.namelist()
             without_numbers = [
-                x if not re.search("/[0-9]+$", x) else x[:x.rfind('/')]
-                for x in raw
+                x if not re.search("/[0-9]+$", x) else x[: x.rfind("/")] for x in raw
             ]
             return sorted(set(without_numbers))
 
@@ -191,7 +191,7 @@ class OvcaBiobank(object):
         import json
 
         with self.zf.open("_meta/_to_wide_columns") as op:
-            return json.loads(op.read().decode('utf-8'))
+            return json.loads(op.read().decode("utf-8"))
 
     @lru_cache(maxsize=datasets_to_cache)
     def get_wide(
@@ -223,8 +223,8 @@ class OvcaBiobank(object):
             index.append("unit")
         if "name" in df.columns:
             index.append("name")
-        #if 'somascan' in dataset:
-            #raise ValueError(dataset, df.columns, index ,columns)
+        # if 'somascan' in dataset:
+        # raise ValueError(dataset, df.columns, index ,columns)
         dfw = self.to_wide(df, index, columns)
         if apply_exclusion:
             return self.apply_exclusion(dataset, dfw)
@@ -290,8 +290,8 @@ class OvcaBiobank(object):
         """
         if columns == known_compartment_columns:
             columns = [x for x in columns if x in df.columns]
-        #raise ValueError(df.columns,index,columns)
-        df = df.loc[:,["value"] + index + columns]
+        # raise ValueError(df.columns,index,columns)
+        df = df.loc[:, ["value"] + index + columns]
         set_index_on = index + columns
         columns_pos = tuple(range(len(index), len(index) + len(columns)))
         res = df.set_index(set_index_on).unstack(columns_pos)
@@ -430,15 +430,20 @@ class OvcaBiobank(object):
             yield name, self.get_dataset(name)
 
     def dataset_exists(self, name):
-        if name not in self.list_datasets_including_meta():
+        datasets = self.list_datasets_including_meta()
+        if name not in datasets:
             next = "primary/" + name
-            if next in self.list_datasets_including_meta():
+            if next in datasets:
                 name = next
             else:
-                raise KeyError(
-                    "No such dataset: %s.\nAvailable: %s"
-                    % (name, self.list_datasets_including_meta())
-                )
+                msg = "No such dataset: %s." % name
+                import difflib
+
+                msg += "Suggestions: "
+                for x in difflib.get_close_matches(name, datasets):
+                    msg += " " + x + " "
+                msg += ". Use .list_datasets() to view all datasets"
+                raise KeyError(msg)
         return name
 
     @lru_cache(datasets_to_cache)
@@ -464,7 +469,7 @@ class OvcaBiobank(object):
                     dfs.append(pd.read_parquet(op))
                 ii += 1
                 sub_name = name + "/" + str(ii)
-            if not dfs: # not actually a unit splitted dataframe - meta? 
+            if not dfs:  # not actually a unit splitted dataframe - meta?
                 with self.zf.open(name) as op:
                     df = pd.read_parquet(op)
             elif len(dfs) == 1:
@@ -473,7 +478,7 @@ class OvcaBiobank(object):
                 categoricals = set()
                 for df in dfs:
                     for c, dt in df.dtypes.items():
-                        if dt.name == 'category':
+                        if dt.name == "category":
                             categoricals.add(c)
                 df = pd.concat(dfs)
                 reps = {c: pd.Categorical(df[c]) for c in categoricals}
@@ -484,7 +489,7 @@ class OvcaBiobank(object):
                 "Unexpected data format. Do you need to upgrade marburg_biobank?"
             )
         if apply_exclusion:
-                df = self.apply_exclusion(name, df)
+            df = self.apply_exclusion(name, df)
         return df
 
     def get_comment(self, name):
