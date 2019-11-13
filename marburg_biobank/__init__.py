@@ -502,6 +502,12 @@ class OvcaBiobank(object):
         else:
             return ""
 
+    def get_changelog(self):
+        try:
+            return self.get_dataset("_meta/_changelog").sort_values('revision')
+        except KeyError:
+            raise ValueError("This revision of the biobank did not include a change log.")
+
 
 def _find_newest_revision(username, password, revision):
     import requests
