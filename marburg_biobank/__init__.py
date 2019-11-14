@@ -460,18 +460,41 @@ class OvcaBiobank(object):
                             "Your pandas is too old. You need at least version 0.18"
                         )
         elif self.data_format == "parquet":
+            import pyarrow
             ds = self.zf.namelist()
             ii = 0
             dfs = []
             sub_name = name + "/" + str(ii)
             while sub_name in ds:
-                with self.zf.open(sub_name) as op:
-                    dfs.append(pd.read_parquet(op))
+                try:
+                    with self.zf.open(sub_name) as op:
+                        dfs.append(pd.read_parquet(op))
+                except pyarrow.lib.ArrowIOError as e:
+                    if 'UnsupportedOperation' in str(e): # python prior 3.7 has no seek on zipfiles
+                        import io
+                        with self.zf.open(sub_name) as op:
+                            b = io.BytesIO()
+                            b.write(op.read())
+                            b.seek(0)
+                            dfs.append(pd.read_parquet(b))
+                    else:
+                        raise
                 ii += 1
                 sub_name = name + "/" + str(ii)
             if not dfs:  # not actually a unit splitted dataframe - meta?
-                with self.zf.open(name) as op:
-                    df = pd.read_parquet(op)
+                try:
+                    with self.zf.open(name) as op:
+                        df = pd.read_parquet(op)
+                except pyarrow.lib.ArrowIOError as e:
+                    if 'UnsupportedOperation' in str(e): # python prior 3.7 has no seek on zipfiles
+                        import io
+                        with self.zf.open(name) as op:
+                            b = io.BytesIO()
+                            b.write(op.read())
+                            b.seek(0)
+                            df = pd.read_parquet(b)
+                    else:
+                        raise
             elif len(dfs) == 1:
                 df = dfs[0]
             else:
