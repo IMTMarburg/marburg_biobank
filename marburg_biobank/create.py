@@ -10,6 +10,7 @@ import zipfile
 import os
 import json
 import base64
+from . import WideNotSupported
 
 # for the primary data
 must_have_columns = ["variable", "unit", "value", "patient"]
@@ -69,7 +70,9 @@ def check_dataframe(name, df):
     basename = os.path.basename(name)
     # no fixed requirements on _meta dfs
     if not basename.startswith("_") and not name.startswith("_"):
-        if name.startswith("secondary"):
+        if '_differential/' in name: # no special requirements for differential datasets for now
+            mh = set() 
+        elif name.startswith("secondary"):
             mh = set(must_have_columns_secondary)
         elif name.startswith("tertiary/genelists"):
             mh = set(must_have_columns_tertiary_genelists)
@@ -133,6 +136,7 @@ def check_dataframe(name, df):
         not basename.startswith("_")
         and not name.startswith("_")
         and not name.startswith("tertiary")
+        and not '_differential/' in name
     ):
         for vu, group in df.groupby(["variable", "unit"]):
             variable, unit = vu
@@ -269,8 +273,6 @@ def create_biobank(dict_of_dataframes, name, revision, filename, to_wide_columns
     # check that we can do the get_wide on all of them
     bb = OvcaBiobank(filename)
     for ds in bb.list_datasets():
-        if ds.startswith("tertiary"):
-            continue
         try:
             df = bb.get_wide(
                 ds,
@@ -278,6 +280,8 @@ def create_biobank(dict_of_dataframes, name, revision, filename, to_wide_columns
                     ~df.unit.isin(["timestamp", "string", "bool"])
                 ],
             )
+        except WideNotSupported:
+            continue
         except:
             print(ds)
             raise
