@@ -15,6 +15,14 @@ except (ImportError, AttributeError):
     sys.path.append(os.path.join(os.path.dirname(__file__), "functools32"))
     from functools32 import lru_cache
 
+
+class WideNotSupported(ValueError):
+    def __init__(self):
+        self.message = (
+            ".get_wide() is not supported for this dataset. Use .get_dataset() instead"
+        )
+
+
 datasets_to_cache = 32
 
 known_compartment_columns = [
@@ -209,10 +217,8 @@ class OvcaBiobank(object):
          takes a df, returns a modified df
 
         """
-        if dataset.startswith("tertiary/genelists"):
-            raise ValueError(
-                "No wide variant for gene lists available. Use get_dataset()"
-            )
+        if dataset.startswith("tertiary/genelists") or "_differential/" in dataset:
+            raise WideNotSupported()
         df = self.get_dataset(dataset)
         if filter_func:
             df = filter_func(df)
@@ -504,9 +510,11 @@ class OvcaBiobank(object):
 
     def get_changelog(self):
         try:
-            return self.get_dataset("_meta/_changelog").sort_values('revision')
+            return self.get_dataset("_meta/_changelog").sort_values("revision")
         except KeyError:
-            raise ValueError("This revision of the biobank did not include a change log.")
+            raise ValueError(
+                "This revision of the biobank did not include a change log."
+            )
 
 
 def _find_newest_revision(username, password, revision):
