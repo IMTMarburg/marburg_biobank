@@ -476,7 +476,10 @@ class OvcaBiobank(object):
                     with self.zf.open(sub_name) as op:
                         dfs.append(pd.read_parquet(op))
                 except pyarrow.lib.ArrowIOError as e:
-                    if 'UnsupportedOperation' in str(e): # python prior 3.7 has no seek on zipfiles
+                    if (
+                            'UnsupportedOperation' in str(e) or # python prior 3.7 has no seek on zipfiles
+                            "attribute 'writing" in str(e) # 3.7.0 bug
+                        ): 
                         import io
                         with self.zf.open(sub_name) as op:
                             b = io.BytesIO()
