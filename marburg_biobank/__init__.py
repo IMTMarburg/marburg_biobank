@@ -452,6 +452,25 @@ class OvcaBiobank(object):
                 raise KeyError(msg)
         return name
 
+    def __load_df_from_parquet(self, name):
+        try:
+            with self.zf.open(name) as op:
+                return pd.read_parquet(op)
+        except pyarrow.lib.ArrowIOError as e:
+            if "UnsupportedOperation" in str(
+                e
+            ):  # python prior 3.7 has no seek on zipfiles
+                import io
+
+                with self.zf.open(name) as op:
+                    b = io.BytesIO()
+                    b.write(op.read())
+                    b.seek(0)
+                    return pd.read_parquet(b)
+            else:
+                raise
+        raise NotImplementedError()
+
     @lru_cache(datasets_to_cache)
     def get_dataset(self, name, apply_exclusion=False):
         """Retrieve a dataset"""
@@ -467,43 +486,17 @@ class OvcaBiobank(object):
                         )
         elif self.data_format == "parquet":
             import pyarrow
+
             ds = self.zf.namelist()
             ii = 0
             dfs = []
             sub_name = name + "/" + str(ii)
             while sub_name in ds:
-                try:
-                    with self.zf.open(sub_name) as op:
-                        dfs.append(pd.read_parquet(op))
-                except pyarrow.lib.ArrowIOError as e:
-                    if (
-                            'UnsupportedOperation' in str(e) or # python prior 3.7 has no seek on zipfiles
-                            "attribute 'writing" in str(e) # 3.7.0 bug
-                        ): 
-                        import io
-                        with self.zf.open(sub_name) as op:
-                            b = io.BytesIO()
-                            b.write(op.read())
-                            b.seek(0)
-                            dfs.append(pd.read_parquet(b))
-                    else:
-                        raise
+                dfs.append(self.__load_df_from_parquet(sub_name))
                 ii += 1
                 sub_name = name + "/" + str(ii)
             if not dfs:  # not actually a unit splitted dataframe - meta?
-                try:
-                    with self.zf.open(name) as op:
-                        df = pd.read_parquet(op)
-                except pyarrow.lib.ArrowIOError as e:
-                    if 'UnsupportedOperation' in str(e): # python prior 3.7 has no seek on zipfiles
-                        import io
-                        with self.zf.open(name) as op:
-                            b = io.BytesIO()
-                            b.write(op.read())
-                            b.seek(0)
-                            df = pd.read_parquet(b)
-                    else:
-                        raise
+                df = self.__load_df_from_parquet(name)
             elif len(dfs) == 1:
                 df = dfs[0]
             else:
