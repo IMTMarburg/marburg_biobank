@@ -454,11 +454,12 @@ class OvcaBiobank(object):
 
     def __load_df_from_parquet(self, name):
         import pyarrow
+
         try:
             with self.zf.open(name) as op:
                 return pd.read_parquet(op)
         except pyarrow.lib.ArrowIOError as e:
-            if "UnsupportedOperation" in str(
+            if "UnsupportedOperation" in str(e) or "has no attribute" in str(
                 e
             ):  # python prior 3.7 has no seek on zipfiles
                 import io
