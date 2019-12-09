@@ -453,6 +453,7 @@ class OvcaBiobank(object):
         return name
 
     def __load_df_from_parquet(self, name):
+        import pyarrow
         try:
             with self.zf.open(name) as op:
                 return pd.read_parquet(op)
