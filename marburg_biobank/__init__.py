@@ -217,6 +217,7 @@ class OvcaBiobank(object):
          takes a df, returns a modified df
 
         """
+        dataset = self.dataset_exists(dataset)
         if dataset.startswith("tertiary/genelists") or "_differential/" in dataset:
             raise WideNotSupported()
         df = self.get_dataset(dataset)
