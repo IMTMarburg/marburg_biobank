@@ -32,6 +32,8 @@ allowed_cells = {
     "NK",
     "n.a.",
     "adipocyte",
+    'HPMC',
+    "CAF",
 }
 allowed_tissues = {"blood", "ascites", "n.a.", "omentum"}
 allowed_disease_states = {"cancer", "healthy", "benign", "n.a."}
@@ -283,7 +285,7 @@ def create_biobank(dict_of_dataframes, name, revision, filename, to_wide_columns
         except WideNotSupported:
             continue
         except:
-            print(ds)
+            print('issue is in', ds)
             raise
         # df = bb.get_wide(ds)
         for idx, row in df.iterrows():
