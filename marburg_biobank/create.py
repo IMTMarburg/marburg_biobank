@@ -72,7 +72,9 @@ def check_dataframe(name, df):
     basename = os.path.basename(name)
     # no fixed requirements on _meta dfs
     if not basename.startswith("_") and not name.startswith("_"):
-        if '_differential/' in name: # no special requirements for differential datasets for now
+        if ('_differential/' in name or # no special requirements for differential datasets for now
+                '/genomics/' in name # mutation data is weird enough.
+            ):
             mh = set() 
         elif name.startswith("secondary"):
             mh = set(must_have_columns_secondary)
@@ -138,7 +140,7 @@ def check_dataframe(name, df):
         not basename.startswith("_")
         and not name.startswith("_")
         and not name.startswith("tertiary")
-        and not '_differential/' in name
+        and mh# was not '_differential/' in name
     ):
         for vu, group in df.groupby(["variable", "unit"]):
             variable, unit = vu

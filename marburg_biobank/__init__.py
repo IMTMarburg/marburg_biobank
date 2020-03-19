@@ -201,6 +201,15 @@ class OvcaBiobank(object):
         with self.zf.open("_meta/_to_wide_columns") as op:
             return json.loads(op.read().decode("utf-8"))
 
+    def has_wide(self, dataset):
+        if dataset.startswith("tertiary/genelists") or "_differential/" in dataset:
+            return False
+        columns_to_use = self._get_dataset_columns_meta()
+        if dataset in columns_to_use and not columns_to_use[dataset]:
+            return False
+        return True
+
+
     @lru_cache(maxsize=datasets_to_cache)
     def get_wide(
         self, dataset, apply_exclusion=True, standardized=False, filter_func=None
@@ -218,7 +227,7 @@ class OvcaBiobank(object):
 
         """
         dataset = self.dataset_exists(dataset)
-        if dataset.startswith("tertiary/genelists") or "_differential/" in dataset:
+        if not self.has_wide(dataset):
             raise WideNotSupported()
         df = self.get_dataset(dataset)
         if filter_func:
