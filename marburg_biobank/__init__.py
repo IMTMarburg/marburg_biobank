@@ -29,6 +29,7 @@ known_compartment_columns = [
     "compartment",
     "cell_type",
     "disease",
+    "culture_method", # for those cells we can't take into sequencing ex vivo
     # these are only for backward compability
     "tissue",
     "disease-state",
