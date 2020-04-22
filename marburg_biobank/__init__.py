@@ -29,7 +29,7 @@ known_compartment_columns = [
     "compartment",
     "cell_type",
     "disease",
-    "culture_method", # for those cells we can't take into sequencing ex vivo
+    "culture_method",  # for those cells we can't take into sequencing ex vivo
     # these are only for backward compability
     "tissue",
     "disease-state",
@@ -209,7 +209,6 @@ class OvcaBiobank(object):
         if dataset in columns_to_use and not columns_to_use[dataset]:
             return False
         return True
-
 
     @lru_cache(maxsize=datasets_to_cache)
     def get_wide(
@@ -469,7 +468,7 @@ class OvcaBiobank(object):
         try:
             with self.zf.open(name) as op:
                 return pd.read_parquet(op)
-        except pyarrow.lib.ArrowIOError as e:
+        except Exception as e:
             if "UnsupportedOperation" in str(e) or "has no attribute" in str(
                 e
             ):  # python prior 3.7 has no seek on zipfiles
