@@ -32,6 +32,8 @@ allowed_cells = {
     "NK",
     "n.a.",
     "adipocyte",
+    'HPMC',
+    "CAF",
 }
 allowed_tissues = {"blood", "ascites", "n.a.", "omentum"}
 allowed_disease_states = {"cancer", "healthy", "benign", "n.a."}
@@ -70,7 +72,9 @@ def check_dataframe(name, df):
     basename = os.path.basename(name)
     # no fixed requirements on _meta dfs
     if not basename.startswith("_") and not name.startswith("_"):
-        if '_differential/' in name: # no special requirements for differential datasets for now
+        if ('_differential/' in name or # no special requirements for differential datasets for now
+                '/genomics/' in name # mutation data is weird enough.
+            ):
             mh = set() 
         elif name.startswith("secondary"):
             mh = set(must_have_columns_secondary)
@@ -136,7 +140,7 @@ def check_dataframe(name, df):
         not basename.startswith("_")
         and not name.startswith("_")
         and not name.startswith("tertiary")
-        and not '_differential/' in name
+        and mh# was not '_differential/' in name
     ):
         for vu, group in df.groupby(["variable", "unit"]):
             variable, unit = vu
@@ -283,7 +287,7 @@ def create_biobank(dict_of_dataframes, name, revision, filename, to_wide_columns
         except WideNotSupported:
             continue
         except:
-            print(ds)
+            print('issue is in', ds)
             raise
         # df = bb.get_wide(ds)
         for idx, row in df.iterrows():
