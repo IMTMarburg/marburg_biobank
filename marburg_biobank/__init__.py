@@ -220,7 +220,12 @@ class OvcaBiobank(object):
 
     @lru_cache(maxsize=datasets_to_cache)
     def get_wide(
-        self, dataset, apply_exclusion=True, standardized=False, filter_func=None
+        self,
+        dataset,
+        apply_exclusion=True,
+        standardized=False,
+        filter_func=None,
+        column="value",
     ):
         """Return dataset in row=variable, column=patient format.
         if @standardized is True Index is always (variable, unit) or (variable, unit, name), 
@@ -249,7 +254,7 @@ class OvcaBiobank(object):
             index.append("name")
         # if 'somascan' in dataset:
         # raise ValueError(dataset, df.columns, index ,columns)
-        dfw = self.to_wide(df, index, columns)
+        dfw = self.to_wide(df, index, columns, column=column)
         if apply_exclusion:
             return self.apply_exclusion(dataset, dfw)
         else:
@@ -302,6 +307,7 @@ class OvcaBiobank(object):
         index=["variable"],
         columns=known_compartment_columns,
         sort_on_first_level=False,
+        column='value',
     ):
         """Convert a dataset (or filtered dataset) to a wide DataFrame.
         Preferred to pd.pivot_table manually because it is
@@ -315,7 +321,7 @@ class OvcaBiobank(object):
         if columns == known_compartment_columns:
             columns = [x for x in columns if x in df.columns]
         # raise ValueError(df.columns,index,columns)
-        df = df.loc[:, ["value"] + index + columns]
+        df = df.loc[:, [column] + index + columns]
         set_index_on = index + columns
         columns_pos = tuple(range(len(index), len(index) + len(columns)))
         res = df.set_index(set_index_on).unstack(columns_pos)
