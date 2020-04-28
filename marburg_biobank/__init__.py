@@ -469,8 +469,10 @@ class OvcaBiobank(object):
             with self.zf.open(name) as op:
                 return pd.read_parquet(op)
         except Exception as e:
-            if "UnsupportedOperation" in str(e) or "has no attribute" in str(
-                e
+            if (
+                "UnsupportedOperation" in str(e)
+                or "has no attribute" in str(e)
+                or "UnsupportedOperation" in repr(e)
             ):  # python prior 3.7 has no seek on zipfiles
                 import io
 
