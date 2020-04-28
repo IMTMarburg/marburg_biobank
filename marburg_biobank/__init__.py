@@ -79,12 +79,13 @@ class OvcaBiobank(object):
             )
         self._cached_datasets = {}
 
+    @property
+    def tall(self):
+        return _BiobankItemAccessor(self.list_datasets, self.get_dataset)
 
-    def __getitem__(self, key):
-        return self.get_wide(key)
-
-    def _ipython_key_completions_(self):
-        return self.list_datasets()
+    @property
+    def wide(self):
+        return _BiobankItemAccessor(self.list_datasets, self.get_wide)
 
     def get_all_patients(self):
         df = self.get_dataset("_meta/patient_compartment_dataset")
@@ -600,3 +601,15 @@ def download_and_open(username, password, revision=None):
     else:
         print("using local copy %s" % fn)
     return OvcaBiobank(fn)
+
+
+class _BiobankItemAccessor:
+    def __init__(self, list_callback, get_callback):
+        self.list_callback = list_callback
+        self.get_callback = get_callback
+
+    def __getitem__(self, key):
+        return self.get_callback(key)
+
+    def _ipython_key_completions_(self):
+        return self.list_callback()
