@@ -79,6 +79,13 @@ class OvcaBiobank(object):
             )
         self._cached_datasets = {}
 
+
+    def __getitem__(self, key):
+        return self.get_wide(key)
+
+    def _ipython_key_completions_(self):
+        return self.list_datasets()
+
     def get_all_patients(self):
         df = self.get_dataset("_meta/patient_compartment_dataset")
         return set(df["patient"].unique())
