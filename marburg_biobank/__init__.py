@@ -341,6 +341,7 @@ class OvcaBiobank(object):
         else:
             c = list(c)
         res.columns = c
+        single_unit = not 'unit' in df.columns or len(df['unit'].unique()) == 1
         if isinstance(c, list):
             res.columns.names = columns
         if sort_on_first_level:
@@ -350,10 +351,11 @@ class OvcaBiobank(object):
             x = res[c].fillna(value=np.nan, inplace=False)
             if (x == None).any():  # noqa: E711
                 raise ValueError("here")
-            try:
-                res[c] = pd.to_numeric(x, errors="raise")
-            except (ValueError, TypeError):  # leaving the Nones as Nones
-                pass
+            if single_unit: # don't do this for multiple units -> might have multiple dtypes
+                try:
+                    res[c] = pd.to_numeric(x, errors="raise")
+                except (ValueError, TypeError):  # leaving the Nones as Nones
+                    pass
         return res
 
     @lru_cache(maxsize=datasets_to_cache)
