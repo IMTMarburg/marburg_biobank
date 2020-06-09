@@ -495,6 +495,13 @@ class OvcaBiobank(object):
                     b.write(op.read())
                     b.seek(0)
                     return pd.read_parquet(b)
+            elif 'not a path-like object' in str(e):
+                import tempfile
+                with tempfile.NamedTemporaryFile(suffix=".biobank.parquet") as tf:
+                    with self.zf.open(name) as op:
+                        tf.write(op.read())
+                    tf.flush()
+                    return pd.read_parquet(tf.name)
             else:
                 raise
         raise NotImplementedError()
