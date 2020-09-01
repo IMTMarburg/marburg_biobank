@@ -321,7 +321,11 @@ class OvcaBiobank(object):
         if columns == known_compartment_columns:
             columns = [x for x in columns if x in df.columns]
         # raise ValueError(df.columns,index,columns)
-        df = df.loc[:, [column] + index + columns]
+        chosen = [column] + index + columns
+        df = df.loc[:, [x for x in chosen if x in df.columns]]
+        for x in chosen:
+            if x not in df.columns:
+                df = df.assign(**{x: np.nan})
         set_index_on = index + columns
         columns_pos = tuple(range(len(index), len(index) + len(columns)))
         res = df.set_index(set_index_on).unstack(columns_pos)
