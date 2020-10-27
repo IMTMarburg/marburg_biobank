@@ -213,7 +213,10 @@ class OvcaBiobank(object):
     def has_wide(self, dataset):
         if dataset.startswith("tertiary/genelists") or "_differential/" in dataset:
             return False
-        columns_to_use = self._get_dataset_columns_meta()
+        try:
+            columns_to_use = self._get_dataset_columns_meta()
+        except KeyError:
+            return True
         if dataset in columns_to_use and not columns_to_use[dataset]:
             return False
         return True
