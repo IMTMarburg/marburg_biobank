@@ -517,9 +517,13 @@ class OvcaBiobank(object):
         """Retrieve a dataset"""
         name = self.dataset_exists(name)
         if self.data_format == "msg_pack":
+            try:
+                import mbf_pandas_msgpack
+            except (ImportError, AttributeError):
+                raise ImportError("Please install mbf-pandas-msgpack to read this old school biobank file")
             with self.zf.open(name) as op:
                 try:
-                    df = pd.read_msgpack(op.read())
+                    df = mbf_pandas_msgpack.read_msgpack(op.read())
                 except KeyError as e:
                     if "KeyError: u'category'" in str(e):
                         raise ValueError(
