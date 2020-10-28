@@ -3,7 +3,7 @@ import os
 import numpy as np
 import pandas as pd
 
-from .__version__ import __version__
+__version__ = "0.141"
 
 try:
     from functools import lru_cache
@@ -586,15 +586,19 @@ class Biobank(object):
                 "This revision of the biobank did not include a change log."
             )
 
+def biobank_to_url(biobank):
+    if biobank.lower() == 'ovca':
+        return "https://mbf.imt.uni-marburg.de/biobank"
+    elif biobank.lower() == 'paad':
+        return "https://mbf.imt.uni-marburg.de/biobank_paad"
+    else:
+        raise ValueError(f"Don't know how to download {biobank}")
+
 
 def _find_newest_revision(username, password, revision, biobank):
     import requests
-
-    if biobank.lower() == 'ovca':
-        url = "https://mbf.imt.uni-marburg.de/biobank/download/find_newest_revision"
-    elif biobank.lower() == 'paad':
-        url = "https://mbf.imt.uni-marburg.de/paad_biobank/download/find_newest_revision"
-    if revision:
+    url = biobank_to_url(biobank) + '/download/find_newest_revision'
+    if revision: # find teh newest sub release (eg. find 20.3 from 20)
         url += "?revision=%s" % revision
     r = requests.get(
         url, stream=True, auth=requests.auth.HTTPBasicAuth(username, password)
@@ -617,13 +621,7 @@ def download_and_open(username, password, revision=None, biobank='ovca'):
     fn = "marburg_%s_biobank_%s.zip" % (biobank, newest)
     if not Path(fn).exists():
         print("downloading biobank revision %s" % newest)
-        if biobank.lower() == 'ovca':
-            url = "https://mbf.imt.uni-marburg.de/biobank/download/marburg_biobank?revision=%s"
-        elif biobank.lower() == 'paad':
-            url = "https://mbf.imt.uni-marburg.de/paad_biobank/download/marburg_biobank?revision=%s"
-        else:
-            raise ValueError(f"Don't know how to download {biobank}")
-        url = url % newest
+        url = biobank_to_url(biobank) + "/download/marburg_biobank?revision=%s" % newest
         r = requests.get(
             url, stream=True, auth=requests.auth.HTTPBasicAuth(username, password)
         )
