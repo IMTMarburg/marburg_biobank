@@ -12,40 +12,86 @@ import json
 import base64
 from . import WideNotSupported
 
-# for the primary data
-must_have_columns = ["variable", "unit", "value", "patient"]
-# for 'secondary' datasets
-must_have_columns_secondary = ["variable", "unit", "value"]
-# for gene lists
-must_have_columns_tertiary_genelists = ["stable_id", "gene"]
 
-allowed_cells = {
-    "T",
-    "macrophage",
-    "tumor",
-    "tumor_s",
-    "tumor_sc",
-    "tumor_m",
-    "tumor_L",
-    "tumor_G",
-    "MDSC",
-    "NK",
-    "n.a.",
-    "adipocyte",
-    'HPMC',
-    "CAF",
-}
-allowed_tissues = {"blood", "ascites", "n.a.", "omentum"}
-allowed_disease_states = {"cancer", "healthy", "benign", "n.a."}
+settings = None
 
 
-def check_patient_id(patient_id):
-    if patient_id.startswith("OVCA"):
-        if not re.match(r"^OVCA\d+$", patient_id):
-            raise ValueError("Patient id must be OVCA\\d if it starts with OVCA")
-        return "cancer"
-    else:
-        return "non-cancer"
+def apply_ovca_settings():
+    global settings
+    if settings is not None and settings["what"] != "OVCA":
+        raise ValueError("different apply_*_settings being called")
+
+    def check_patient_id(patient_id):
+        if patient_id.startswith("OVCA"):
+            if not re.match(r"^OVCA\d+$", patient_id):
+                raise ValueError("Patient id must be OVCA\\d if it starts with OVCA")
+            return "cancer"
+        elif patient_id.startswith("OC"):
+            raise ValueError("OVCA patients must not start with OC")
+        else:
+            return "non-cancer"
+
+    settings = {
+        "what": "OVCA",
+        # for the primary data
+        "must_have_columns": ["variable", "unit", "value", "patient"],
+        # for 'secondary' datasets
+        "must_have_columns_secondary": ["variable", "unit", "value"],
+        # for gene lists
+        "must_have_columns_tertiary_genelists": ["stable_id", "gene"],
+        "allowed_cells": {
+            "T",
+            "macrophage",
+            "tumor",
+            "tumor_s",
+            "tumor_sc",
+            "tumor_m",
+            "tumor_L",
+            "tumor_G",
+            "MDSC",
+            "NK",
+            "n.a.",
+            "adipocyte",
+            "HPMC",
+            "CAF",
+        },
+        "allowed_compartments": {"blood", "ascites", "n.a.", "omentum"},
+        "allowed_disease_states": {"cancer", "healthy", "benign", "n.a."},
+        "check_patient_id": check_patient_id,
+        'database_filename_template': 'marburg_ovca_revision_%s.zip'
+    }
+
+
+def apply_paad_settings():
+    "for the pancreas biobank"
+    global settings
+    if settings is not None and settings["what"] != "PAAD":
+        raise ValueError("different apply_*_settings being called")
+
+    def check_patient_id(patient_id):
+        if patient_id.startswith("ACH"):
+            if not re.match(r"^ACH-\d+$", patient_id):
+                raise ValueError("Patient id must be ACH\\d if it starts with ACH")
+            return "PAAD"
+        else:
+            raise ValueError(
+                "PAAD patients must start with ACH (non-cancer samples yet to be suported in apply_paad_settings"
+            )
+
+    settings = {
+        "what": "PAAD",
+        # for the primary data
+        "must_have_columns": ["variable", "unit", "value", "patient"],
+        # for 'secondary' datasets
+        "must_have_columns_secondary": ["variable", "unit", "value"],
+        # for gene lists
+        "must_have_columns_tertiary_genelists": ["stable_id", "gene"],
+        "allowed_cells": {"solid_tumor_mix",},
+        "allowed_compartments": {"tumor"},  # -
+        "allowed_disease_states": {"PAAD",},
+        "check_patient_id": check_patient_id,
+        'database_filename_template': 'marburg_paad_biobank_revision_%s.zip'
+    }
 
 
 def check_dataframe(name, df):
@@ -56,15 +102,17 @@ def check_dataframe(name, df):
     # x.encode("utf-8") if isinstance(x, str) else x for x in df.variable
     # ]
     # )
+    if settings is None:
+        raise ValueError("Must call apply_*_settings (eg. apply_ovca_settings) first")
     for c in "seperate_me":
         if c in df.columns:
             raise ValueError("%s must no longer be a df column - %s " % (c, name))
     if "compartment" in df.columns and not "disease" in df.columns:
         raise ValueError("Columns must now be cell_type/disease/compartment split")
-    if "patient" in df.columns and df["patient"].str.startswith("OC").any():
-        raise ValueError(
-            "No patient may start with OC. - check if they've been 'OVCA'-ified"
-        )  #
+    if "patient" in df.columns:
+        for patient in df["patient"]:
+            settings["check_patient_id"](patient)
+        #
     # dataframes ofter now are _actual_name/0-9+,
     # but possibly only after writing it out...
     if re.search("/[0-9]+$", name):
@@ -72,16 +120,18 @@ def check_dataframe(name, df):
     basename = os.path.basename(name)
     # no fixed requirements on _meta dfs
     if not basename.startswith("_") and not name.startswith("_"):
-        if ('_differential/' in name or # no special requirements for differential datasets for now
-                '/genomics/' in name # mutation data is weird enough.
-            ):
-            mh = set() 
+        if (
+            "_differential/" in name
+            or "/genomics/"  # no special requirements for differential datasets for now
+            in name  # mutation data is weird enough.
+        ):
+            mh = set()
         elif name.startswith("secondary"):
-            mh = set(must_have_columns_secondary)
+            mh = set(settings["must_have_columns_secondary"])
         elif name.startswith("tertiary/genelists"):
-            mh = set(must_have_columns_tertiary_genelists)
+            mh = set(settings["must_have_columns_tertiary_genelists"])
         else:
-            mh = set(must_have_columns)
+            mh = set(settings["must_have_columns"])
             for c in "cell", "disease_state", "tissue":
                 if c in df.columns:
                     raise ValueError(
@@ -102,9 +152,9 @@ def check_dataframe(name, df):
             )
 
     for column, allowed_values in [
-        ("cell_type", allowed_cells),
-        ("compartment", allowed_tissues),
-        ("disease", allowed_disease_states),
+        ("cell_type", settings["allowed_cells"]),
+        ("compartment", settings["allowed_compartments"]),
+        ("disease", settings["allowed_disease_states"]),
     ]:
         if column in df.columns and not name.startswith("secondary/"):
             x = set(df[column].unique()).difference(allowed_values)
@@ -115,7 +165,7 @@ def check_dataframe(name, df):
                 )
 
     if "patient" in df.columns and not name.endswith("_exclusion"):
-        states = set([check_patient_id(x) for x in df["patient"]])
+        states = set([settings["check_patient_id"](x) for x in df["patient"]])
         if len(states) > 1:
             if "disease" not in df.columns:
                 raise ValueError(
@@ -140,7 +190,7 @@ def check_dataframe(name, df):
         not basename.startswith("_")
         and not name.startswith("_")
         and not name.startswith("tertiary")
-        and mh# was not '_differential/' in name
+        and mh  # was not '_differential/' in name
     ):
         for vu, group in df.groupby(["variable", "unit"]):
             variable, unit = vu
@@ -231,6 +281,8 @@ def create_biobank(dict_of_dataframes, name, revision, filename, to_wide_columns
     """Create a file suitable for biobank consumption.
     Assumes all dataframes pass check_dataframe
     """
+    if settings is None:
+        raise ValueError("Must call apply_*_settings (eg. apply_ovca_settings) first")
     dict_of_dataframes["_meta/biobank"] = pd.DataFrame(
         [
             {"variable": "biobank", "value": name},
@@ -249,8 +301,8 @@ def create_biobank(dict_of_dataframes, name, revision, filename, to_wide_columns
         s = time.time()
         # enforce alphabetical column order after default columns
         df = df[
-            [x for x in must_have_columns if x in df.columns]
-            + sorted([x for x in df.columns if x not in must_have_columns])
+            [x for x in settings["must_have_columns"] if x in df.columns]
+            + sorted([x for x in df.columns if x not in settings["must_have_columns"]])
         ]
         print("column order time", time.time() - s)
         dict_of_dataframes[name] = df
@@ -287,7 +339,7 @@ def create_biobank(dict_of_dataframes, name, revision, filename, to_wide_columns
         except WideNotSupported:
             continue
         except:
-            print('issue is in', ds)
+            print("issue is in", ds)
             raise
         # df = bb.get_wide(ds)
         for idx, row in df.iterrows():
@@ -330,13 +382,13 @@ def exporting_class(cls):
     exporting_classes.append(cls)
     return cls
 
+
 def prep_desc(x):
     x = x.strip()
     import re
+
     x = re.sub("\n[ ]+", "\n", x)
     return x
-
-
 
 
 def exporting_method(output_name, description, input_files=[], deps=[]):
