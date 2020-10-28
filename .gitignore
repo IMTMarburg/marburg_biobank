@@ -1,0 +1,6 @@
+syntax: glob
+README.rst
+*.pyc
+build/*
+dist/*
+marburg_biobank.egg-info/*
