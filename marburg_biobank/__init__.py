@@ -213,7 +213,10 @@ class Biobank(object):
     def has_wide(self, dataset):
         if dataset.startswith("tertiary/genelists") or "_differential/" in dataset:
             return False
-        columns_to_use = self._get_dataset_columns_meta()
+        try:
+            columns_to_use = self._get_dataset_columns_meta()
+        except KeyError:
+            return True
         if dataset in columns_to_use and not columns_to_use[dataset]:
             return False
         return True
@@ -520,9 +523,13 @@ class Biobank(object):
         """Retrieve a dataset"""
         name = self.dataset_exists(name)
         if self.data_format == "msg_pack":
+            try:
+                import mbf_pandas_msgpack
+            except (ImportError, AttributeError):
+                raise ImportError("Please install mbf-pandas-msgpack to read this old school biobank file")
             with self.zf.open(name) as op:
                 try:
-                    df = pd.read_msgpack(op.read())
+                    df = mbf_pandas_msgpack.read_msgpack(op.read())
                 except KeyError as e:
                     if "KeyError: u'category'" in str(e):
                         raise ValueError(
