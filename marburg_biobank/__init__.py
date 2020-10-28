@@ -57,7 +57,7 @@ def lazy_member(field):
     return decorate
 
 
-class OvcaBiobank(object):
+class Biobank(object):
     """An interface to a dump of our Biobank.
     Also used internally by the biobank website to access the data.
 
@@ -370,8 +370,11 @@ class OvcaBiobank(object):
         certain compartments where excluded.
 
         """
-        global_exclusion_df = self.get_dataset("clinical/_other_exclusion")
-        excluded = set(global_exclusion_df["patient"].unique())
+        try:
+            global_exclusion_df = self.get_dataset("clinical/_other_exclusion")
+            excluded = set(global_exclusion_df["patient"].unique())
+        except KeyError:
+            excluded = set()
         # local exclusion from this dataset
         try:
             exclusion_path = (
@@ -577,10 +580,13 @@ class OvcaBiobank(object):
             )
 
 
-def _find_newest_revision(username, password, revision):
+def _find_newest_revision(username, password, revision, biobank):
     import requests
 
-    url = "https://mbf.imt.uni-marburg.de/biobank/download/find_newest_revision"
+    if biobank.lower() == 'ovca':
+        url = "https://mbf.imt.uni-marburg.de/biobank/download/find_newest_revision"
+    elif biobank.lower() == 'paad':
+        url = "https://mbf.imt.uni-marburg.de/paad_biobank/download/find_newest_revision"
     if revision:
         url += "?revision=%s" % revision
     r = requests.get(
@@ -591,23 +597,26 @@ def _find_newest_revision(username, password, revision):
     return r.text
 
 
-def download_and_open(username, password, revision=None):
+def download_and_open(username, password, revision=None, biobank='ovca'):
     from pathlib import Path
     import requests
     import shutil
 
-    newest = _find_newest_revision(username, password, revision)
+    newest = _find_newest_revision(username, password, revision, biobank)
     if revision is None:
         print("newest revision is", newest)
     else:
         print("newest revision for %s is %s" % (revision, newest))
-    fn = "marburg_ovca_biobank_%s.zip" % newest
+    fn = "marburg_%s_biobank_%s.zip" % (biobank, newest)
     if not Path(fn).exists():
         print("downloading biobank revision %s" % newest)
-        url = (
-            "https://mbf.imt.uni-marburg.de/biobank/download/marburg_biobank?revision=%s"
-            % newest
-        )
+        if biobank.lower() == 'ovca':
+            url = "https://mbf.imt.uni-marburg.de/biobank/download/marburg_biobank?revision=%s"
+        elif biobank.lower() == 'paad':
+            url = "https://mbf.imt.uni-marburg.de/paad_biobank/download/marburg_biobank?revision=%s"
+        else:
+            raise ValueError(f"Don't know how to download {biobank}")
+        url = url % newest
         r = requests.get(
             url, stream=True, auth=requests.auth.HTTPBasicAuth(username, password)
         )
@@ -619,7 +628,7 @@ def download_and_open(username, password, revision=None):
         fh.close()
     else:
         print("using local copy %s" % fn)
-    return OvcaBiobank(fn)
+    return Biobank(fn)
 
 
 class _BiobankItemAccessor:
@@ -632,3 +641,5 @@ class _BiobankItemAccessor:
 
     def _ipython_key_completions_(self):
         return self.list_callback()
+
+OvcaBiobank = Biobank # old school code support
