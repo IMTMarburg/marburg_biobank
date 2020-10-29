@@ -1,8 +1,0 @@
-README.md
-setup.cfg
-setup.py
-src/marburg_biobank.egg-info/PKG-INFO
-src/marburg_biobank.egg-info/SOURCES.txt
-src/marburg_biobank.egg-info/dependency_links.txt
-src/marburg_biobank.egg-info/requires.txt
-src/marburg_biobank.egg-info/top_level.txt
