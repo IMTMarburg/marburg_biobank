@@ -18,7 +18,7 @@ def disable_use_redirect_file():
     jupyter_config = Path("~/.jupyter/jupyter_notebook_config.py").expanduser()
     if not jupyter_config.exists():
         subprocess.check_call([jupyter_cmd, "notebook", "--generate-config"])
-    fix = "\\nc.NotebookApp.use_redirect_file = False\\n"
+    fix = "\nc.NotebookApp.use_redirect_file = False\n"
     if not fix in jupyter_config.read_text():
         with open(jupyter_config, "a+") as op:
             op.write(fix)
