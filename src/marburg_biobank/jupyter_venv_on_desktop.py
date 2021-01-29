@@ -3,9 +3,12 @@ import sys
 import subprocess
 from pathlib import Path
 
-venv_path = Path(os.environ['VIRTUAL_ENV'])
+venv_path = Path(sys.prefix)
 notebook_path = venv_path.parent
-jupyter_cmd = 'jupyter' # should use the venv's jupyter, right
+if sys.platform == 'Win32':
+    jupyter_cmd = venv_path / 'Scripts' / 'jupyter.exe' # should use the venv's jupyter, right
+else:
+    jupyter_cmd = venv_path / 'bin' / 'jupyter' # should use the venv's jupyter, right
 
 def disable_use_redirect_file():
     jupyter_config = Path("~/.jupyter/jupyter_notebook_config.py").expanduser()
@@ -18,7 +21,7 @@ def disable_use_redirect_file():
     print("Disabled file based jupyter redirect")
 
 def place_shortcut_on_desktop():
-    if sys.platform == 'Windows':
+    if sys.platform == 'Win32':
         cmd = 'PowerShell -NoProfile --Command "Write-Host([Environment]::GetFolderPath(\'Desktop\'))"'
         desktop_folder = Path(subprocess.check_output(cmd, shell=True).decode('utf-8'))
         bin = 'Scripts'
@@ -26,17 +29,16 @@ def place_shortcut_on_desktop():
         desktop_folder = Path("~/Desktop").expanduser()
         bin = 'bin'
     target = desktop_folder / ("jupyter notebook " + notebook_path.name + '.py')
-    jcmd = venv_path / bin / 'jupyter'
     target.write_text(f"""#!/usr/bin/env python3
 import subprocess
-subprocess.call(["{jcmd}", 'notebook'], cwd="{notebook_path}")
+subprocess.call([r"{jupyter_cmd}", 'notebook'], cwd=r"{notebook_path}")
 """)
-    if sys.platform != 'Windows':
+    if sys.platform != 'Win32':
         os.chmod(target, 0o755)
     print("Placed jupyter shortcut on desktop")
 
 def main():
-    if sys.platform == 'Windows':
+    if sys.platform == 'Win32':
         disable_use_redirect_file()
     place_shortcut_on_desktop()
 
