@@ -21,14 +21,14 @@ def disable_use_redirect_file():
     fix = "\\nc.NotebookApp.use_redirect_file = False\\n"
     if not fix in jupyter_config.read_text():
         with open(jupyter_config, "a+") as op:
-            op.write_text(fix)
+            op.write(fix)
     print("Disabled file based jupyter redirect")
 
 
 def place_shortcut_on_desktop():
     if is_windows:
-        cmd = "PowerShell -NoProfile --Command \"Write-Host([Environment]::GetFolderPath('Desktop'))\""
-        desktop_folder = Path(subprocess.check_output(cmd, shell=True).decode("utf-8"))
+        cmd = "PowerShell -NoProfile -Command \"Write-Host([Environment]::GetFolderPath('Desktop'))\""
+        desktop_folder = Path(subprocess.check_output(cmd, shell=True).decode("utf-8").strip())
     else:
         desktop_folder = Path("~/Desktop").expanduser()
     target = desktop_folder / ("jupyter notebook " + notebook_path.name + ".py")
@@ -44,6 +44,6 @@ subprocess.call([r"{jupyter_cmd}", 'notebook'], cwd=r"{notebook_path}")
 
 
 def main():
-    if sys.platform == "Win32":
+    if is_windows:
         disable_use_redirect_file()
     place_shortcut_on_desktop()
