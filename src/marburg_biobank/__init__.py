@@ -85,7 +85,7 @@ class Biobank(object):
 
     @property
     def wide(self):
-        return _BiobankItemAccessor(self.list_datasets, lambda dataset: self.get_wide(datset, apply_exclusion=True))
+        return _BiobankItemAccessor(self.list_datasets, lambda dataset: self.get_wide(dataset, apply_exclusion=True))
 
     def get_all_patients(self):
         df = self.get_dataset("_meta/patient_compartment_dataset")
