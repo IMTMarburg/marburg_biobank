@@ -4,7 +4,7 @@ import os
 import numpy as np
 import pandas as pd
 
-__version__ = '0.150'
+__version__ = '0.151'
 
 try:
     from functools import lru_cache
@@ -612,13 +612,14 @@ def _find_newest_revision(username, password, revision, biobank):
 passwd_file = Path("~/.ovca_biobank_password").expanduser()
 def query_user():
     import sys
+    from getpass import getpass
     if passwd_file.exists():
         print("Reading password from " + str(passwd_file))
         username, password = passwd_file.read_text().split("\n")[:2]
         store = False
     else:
         username = input("please enter your username")
-        password = input("please enter your password")
+        password = getpass("please enter your password")
         store = True
     return username, password, store
 
