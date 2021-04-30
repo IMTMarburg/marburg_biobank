@@ -126,7 +126,7 @@ def check_dataframe(name, df):
             in name  # mutation data is weird enough.
         ):
             mh = set()
-        elif name.startswith("secondary"):
+        elif name.startswith("secondary") or name.startswith('tertiary/transcriptomics'):
             mh = set(settings["must_have_columns_secondary"])
         elif name.startswith("tertiary/genelists"):
             mh = set(settings["must_have_columns_tertiary_genelists"])
@@ -156,7 +156,7 @@ def check_dataframe(name, df):
         ("compartment", settings["allowed_compartments"]),
         ("disease", settings["allowed_disease_states"]),
     ]:
-        if column in df.columns and not name.startswith("secondary/"):
+        if column in df.columns and not name.startswith("secondary/") and not name.startswith('tertiary/'):
             x = set(df[column].unique()).difference(allowed_values)
             if x:
                 raise ValueError(
@@ -408,7 +408,11 @@ def exporting_method(output_name, description, input_files=[], deps=[]):
     return inner
 
 
-def run_exports(gen_additional_jobs=None, handle_ppg=True):
+def run_exports(gen_additional_jobs=None, handle_ppg=True, settings='ovca'):
+    if settings == 'ovca':
+        apply_ovca_settings()
+    else:
+        raise ValueError("unknow setting value", settings)
 
     old = Path(os.getcwd()).absolute()
     os.chdir("/project")
