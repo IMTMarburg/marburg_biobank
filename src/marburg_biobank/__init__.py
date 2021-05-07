@@ -2,8 +2,9 @@ import zipfile
 import os
 import numpy as np
 import pandas as pd
+from pathlib import Path
 
-__version__ = '0.153'
+__version__ = '0.154'
 
 try:
     from functools import lru_cache
@@ -640,12 +641,36 @@ def _find_newest_revision(username, password, revision, biobank):
     return r.text
 
 
-def download_and_open(username, password, revision=None, biobank='ovca'):
+passwd_file = Path("~/.ovca_biobank_password").expanduser()
+def query_user():
+    import sys
+    from getpass import getpass
+    if passwd_file.exists():
+        print("Reading password from " + str(passwd_file))
+        username, password = passwd_file.read_text().split("\n")[:2]
+        store = False
+    else:
+        username = input("please enter your username")
+        password = getpass("please enter your password")
+        store = True
+    return username, password, store
+
+
+
+def download_and_open(username=False, password=False, revision=None, biobank='ovca'):
     from pathlib import Path
     import requests
     import shutil
 
+    store = False
+    if username is False and password is False:
+        print("query")
+        username,password, store = query_user()
+
     newest = _find_newest_revision(username, password, revision, biobank)
+    if store:
+        print("Storing password to " + str(passwd_file))
+        passwd_file.write_text("%s\n%s\n" % (username, password))
     if revision is None:
         print("newest revision is", newest)
     else:
