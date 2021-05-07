@@ -276,6 +276,21 @@ class Biobank(object):
             columns_to_use = {}
         if dataset in columns_to_use:
             columns = columns_to_use[dataset]
+            if standardized:
+                for x in known_compartment_columns:
+                    if not x in columns:
+                        columns.append(x)
+                    if x in tall_df.columns and (
+                        (
+                            hasattr(tall_df[x], "cat")
+                            and (len(tall_df[x].cat.categories) > 1)
+                        )
+                        or (len(tall_df[x].unique()) > 1)
+                    ):
+                        pass
+                    else:
+                        if standardized and x not in tall_df.columns:
+                            tall_df = tall_df.assign(**{x: np.nan})
         else:
             if "vid" in tall_df.columns and not "patient" in tall_df.columns:
                 columns = ["vid"]
