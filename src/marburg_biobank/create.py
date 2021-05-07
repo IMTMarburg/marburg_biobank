@@ -23,8 +23,8 @@ def apply_ovca_settings():
 
     def check_patient_id(patient_id):
         if patient_id.startswith("OVCA"):
-            if not re.match(r"^OVCA\d+$", patient_id):
-                raise ValueError("Patient id must be OVCA\\d if it starts with OVCA")
+            if not re.match(r"^OVCA\d+(R[0-9]*)?$", patient_id):
+                raise ValueError("Patient id must follow OVCA\\d(R[0-9]*)? if it starts with OVCA")
             return "cancer"
         elif patient_id.startswith("OC"):
             raise ValueError("OVCA patients must not start with OC")
@@ -130,6 +130,8 @@ def check_dataframe(name, df):
             mh = set(settings["must_have_columns_secondary"])
         elif name.startswith("tertiary/genelists"):
             mh = set(settings["must_have_columns_tertiary_genelists"])
+        elif name.startswith("tertiary/survival"):
+            mh = set()
         else:
             mh = set(settings["must_have_columns"])
             for c in "cell", "disease_state", "tissue":
@@ -391,7 +393,7 @@ def prep_desc(x):
     return x
 
 
-def exporting_method(output_name, description, input_files=[], deps=[]):
+def exporting_method(output_name, description, input_files, deps, wide_columns):
     def inner(func):
         frame = inspect.stack()[1]
         filename = frame.filename
@@ -401,6 +403,9 @@ def exporting_method(output_name, description, input_files=[], deps=[]):
         func._description = prep_desc(description)
         func._input_files = [Path(x).absolute() for x in input_files]
         func._deps = deps
+        func._wide_columns = wide_columns
+        if not isinstance(wide_columns, list):
+            raise ValueError("wide_columns must be a list of str")
         os.chdir(cwd)
         func._abs_filename = str(Path(func.__code__.co_filename).absolute())
         return func
@@ -425,13 +430,7 @@ def run_exports(gen_additional_jobs=None, handle_ppg=True, settings='ovca'):
         instance = cls()
         if hasattr(instance, "exports"):
             instance.exports()
-        if hasattr(instance, "dataset_columns_for_wide"):
-            new = instance.dataset_columns_for_wide()
-            intersection = set(to_wide_columns.keys()).intersection(new.keys())
-            if intersection:
-                raise ValueError("duplicate dataset column definitions", intersection)
-            to_wide_columns.update(new)
-
+        
         out_prefix = getattr(instance, "out_prefix", "")
         for method_name in dir(instance):
             method = getattr(instance, method_name)
@@ -492,6 +491,7 @@ def run_exports(gen_additional_jobs=None, handle_ppg=True, settings='ovca'):
                 print("")
                 os.chdir("/project")
                 jobs.append(job)
+                to_wide_columns[out_prefix + method._output_name] = method._wide_columns
 
     def dump_to_wide_columns(output_filename):
         Path(output_filename).write_text(json.dumps(to_wide_columns))
@@ -544,6 +544,7 @@ def PseudoNotebookRun(notebook_python_file, target_object, chdir=False):
         marburg_biobank.create.write_dfs = write_dfs
         g = globals().copy()
         g["get_ipython"] = get_dummy_ipython
+        g['here'] = Path(notebook_python_file).parent.absolute()
         ppg.util.global_pipegraph = None
         if chdir:
             os.chdir(Path(notebook_python_file).parent)

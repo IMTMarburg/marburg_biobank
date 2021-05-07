@@ -3,7 +3,7 @@ import os
 import numpy as np
 import pandas as pd
 
-__version__ = '0.149'
+__version__ = '0.150'
 
 try:
     from functools import lru_cache
@@ -22,6 +22,9 @@ class WideNotSupported(ValueError):
             ".get_wide() is not supported for this dataset. Use .get_dataset() instead"
         )
 
+
+class CantApplyExclusion(ValueError):
+    pass
 
 datasets_to_cache = 32
 
@@ -259,7 +262,10 @@ class Biobank(object):
         # raise ValueError(dataset, df.columns, index ,columns)
         dfw = self.to_wide(df, index, columns, column=column)
         if apply_exclusion:
-            return self.apply_exclusion(dataset, dfw)
+            try:
+                return self.apply_exclusion(dataset, dfw)
+            except CantApplyExclusion:
+                return dfw
         else:
             return dfw
 
@@ -277,7 +283,7 @@ class Biobank(object):
                 columns = ["patient"]
             else:
                 raise ValueError(
-                    "Do not know how to convert this dataset (neither patient nor vid column)."
+                    "Do not know how to convert this dataset to wide format."
                     " Retrieve it get_dataset() and call to_wide() manually with appropriate parameters."
                 )
             for x in known_compartment_columns:
@@ -433,7 +439,7 @@ class Biobank(object):
                         to_remove.append(c)
             return df.drop(to_remove, axis=1)
         else:
-            raise ValueError(
+            raise CantApplyExclusion(
                 "Sorry, not a tall or wide DataFrame that I know how to handle."
             )
 
@@ -473,20 +479,28 @@ class Biobank(object):
 
     def dataset_exists(self, name):
         datasets = self.list_datasets_including_meta()
-        if name not in datasets:
+        out = False
+        if name in datasets:
+            out = name
+        else:
             next = "primary/" + name
             if next in datasets:
-                name = next
+                out = next
             else:
-                msg = "No such dataset: %s." % name
-                import difflib
+                if name.startswith('secondary/'):
+                    next = 'tertiary' + name[name.find('/'):]
+                    if next in datasets:
+                        out = next
+        if not out:
+            msg = "No such dataset: %s." % name
+            import difflib
 
-                msg += "Suggestions: "
-                for x in difflib.get_close_matches(name, datasets):
-                    msg += " " + x + " "
-                msg += ". Use .list_datasets() to view all datasets"
-                raise KeyError(msg)
-        return name
+            msg += "Suggestions: "
+            for x in difflib.get_close_matches(name, datasets):
+                msg += " " + x + " "
+            msg += ". Use .list_datasets() to view all datasets"
+            raise KeyError(msg)
+        return out
 
     def __load_df_from_parquet(self, name):
         import pyarrow
@@ -565,7 +579,10 @@ class Biobank(object):
                 "Unexpected data format. Do you need to upgrade marburg_biobank?"
             )
         if apply_exclusion:
-            df = self.apply_exclusion(name, df)
+            try:
+                df = self.apply_exclusion(name, df)
+            except CantApplyExclusion:
+                return df
         return df
 
     def get_comment(self, name):
