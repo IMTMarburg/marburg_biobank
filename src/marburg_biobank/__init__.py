@@ -4,7 +4,7 @@ import os
 import numpy as np
 import pandas as pd
 
-__version__ = '0.151'
+__version__ = '0.152'
 
 try:
     from functools import lru_cache
