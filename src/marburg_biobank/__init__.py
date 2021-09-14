@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 from pathlib import Path
 
-__version__ = '0.154'
+__version__ = '0.155'
 
 try:
     from functools import lru_cache
