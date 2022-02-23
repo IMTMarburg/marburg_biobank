@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 from pathlib import Path
 
-__version__ = '0.155'
+__version__ = '0.156'
 
 try:
     from functools import lru_cache
@@ -519,7 +519,13 @@ class Biobank(object):
         return out
 
     def __load_df_from_parquet(self, name):
-        import pyarrow
+        try:
+            import pyarrow
+        except ImportError:
+            try:
+                import fastparquet
+            except ImportError:
+                raise ValueError("marburg_biobank needs either pyarrow or fastparquet")
 
         try:
             with self.zf.open(name) as op:
@@ -566,7 +572,13 @@ class Biobank(object):
                             "Your pandas is too old. You need at least version 0.18"
                         )
         elif self.data_format == "parquet":
-            import pyarrow
+            try:
+                import pyarrow
+            except ImportError:
+                try:
+                    import fastparquet
+                except ImportError:
+                    raise ValueError("marburg_biobank needs either pyarrow or fastparquet")
 
             ds = self.zf.namelist()
             ii = 0
