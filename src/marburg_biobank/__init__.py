@@ -572,7 +572,13 @@ class Biobank(object):
                             "Your pandas is too old. You need at least version 0.18"
                         )
         elif self.data_format == "parquet":
-            import pyarrow
+            try:
+                import pyarrow
+            except ModuleNotFound:
+            try:
+                import fastparquet
+            except ModuleNotFoundError:
+                raise ValueError("marburg_biobank needs either pyarrow or fastparquet")
 
             ds = self.zf.namelist()
             ii = 0
