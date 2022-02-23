@@ -575,10 +575,10 @@ class Biobank(object):
             try:
                 import pyarrow
             except ModuleNotFound:
-            try:
-                import fastparquet
-            except ModuleNotFoundError:
-                raise ValueError("marburg_biobank needs either pyarrow or fastparquet")
+                try:
+                    import fastparquet
+                except ModuleNotFoundError:
+                    raise ValueError("marburg_biobank needs either pyarrow or fastparquet")
 
             ds = self.zf.namelist()
             ii = 0
