@@ -519,7 +519,13 @@ class Biobank(object):
         return out
 
     def __load_df_from_parquet(self, name):
-        import pyarrow
+        try:
+            import pyarrow
+        except ModuleNotFound:
+            try:
+                import fastparquet
+            except ModuleNotFoundError:
+                raise ValueError("marburg_biobank needs either pyarrow or fastparquet")
 
         try:
             with self.zf.open(name) as op:
