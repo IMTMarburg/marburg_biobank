@@ -521,10 +521,10 @@ class Biobank(object):
     def __load_df_from_parquet(self, name):
         try:
             import pyarrow
-        except ModuleNotFound:
+        except ImportError:
             try:
                 import fastparquet
-            except ModuleNotFoundError:
+            except ImportError:
                 raise ValueError("marburg_biobank needs either pyarrow or fastparquet")
 
         try:
@@ -574,10 +574,10 @@ class Biobank(object):
         elif self.data_format == "parquet":
             try:
                 import pyarrow
-            except ModuleNotFound:
+            except ImportError:
                 try:
                     import fastparquet
-                except ModuleNotFoundError:
+                except ImportError:
                     raise ValueError("marburg_biobank needs either pyarrow or fastparquet")
 
             ds = self.zf.namelist()
